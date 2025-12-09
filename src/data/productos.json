@@ -1,0 +1,5 @@
+[
+  { "id": 1, "nombre": "vaso", "precio": 1000 },
+  { "id": 2, "nombre": "plato", "precio": 2000 },
+  { "id": 3, "nombre": "tenedor", "precio": 500 }
+]

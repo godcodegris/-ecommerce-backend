@@ -1,0 +1,16 @@
+import jwt from "jsonwebtoken";
+const SECRET =  "process.env.JWT_SECRET";
+
+export const verificarToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ message: "Token requerido" });
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, SECRET);
+    req.usuario = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ message: "Token inválido" });
+  }
+};
