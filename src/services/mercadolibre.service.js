@@ -1,34 +1,36 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 const ML_BASE = "https://api.mercadolibre.com";
 const ML_AUTH = "https://auth.mercadolibre.com.ar/authorization";
 const ML_TOKEN = "https://api.mercadolibre.com/oauth/token";
 
-const CLIENT_ID = process.env.ML_CLIENT_ID;
-const CLIENT_SECRET = process.env.ML_CLIENT_SECRET;
-const REDIRECT_URI = process.env.ML_REDIRECT_URI;
-
 // Token storage (en producción usar BD)
 let tokens = {};
 
+// Leer env vars dentro de funciones (no al importar)
+const getEnv = () => ({
+  clientId: process.env.ML_CLIENT_ID,
+  clientSecret: process.env.ML_CLIENT_SECRET,
+  redirectUri: process.env.ML_REDIRECT_URI,
+});
+
 // URL para iniciar OAuth
 export const getAuthUrl = () => {
-  return `${ML_AUTH}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=thundera`;
+  const { clientId, redirectUri } = getEnv();
+  return `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=thundera`;
 };
 
 // Intercambiar code por access_token
 export const exchangeCode = async (code) => {
+  const { clientId, clientSecret, redirectUri } = getEnv();
   try {
     const response = await fetch(ML_TOKEN, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         code: code,
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: redirectUri,
       }),
     });
 
@@ -49,14 +51,15 @@ export const exchangeCode = async (code) => {
 
 // Refrescar access_token
 export const refreshToken = async () => {
+  const { clientId, clientSecret } = getEnv();
   try {
     const response = await fetch(ML_TOKEN, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "refresh_token",
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         refresh_token: tokens.refresh_token,
       }),
     });

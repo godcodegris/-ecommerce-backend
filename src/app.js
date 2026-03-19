@@ -1,12 +1,12 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 
 import usersRouter from "./routes/users.routes.js";
 import productsRouter from "./routes/products.routes.js";
 import mlRouter from "./routes/mercadolibre.routes.js";
-
-dotenv.config();
 
 const app = express();
 
