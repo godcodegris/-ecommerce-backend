@@ -35,6 +35,7 @@ export const exchangeCode = async (code) => {
     });
 
     const data = await response.json();
+    console.log("Respuesta ML exchangeCode:", JSON.stringify(data, null, 2));
     tokens = {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
