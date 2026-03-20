@@ -6,11 +6,16 @@ const ML_TOKEN = "https://api.mercadolibre.com/oauth/token";
 let tokens = {};
 
 // Leer env vars dentro de funciones (no al importar)
-const getEnv = () => ({
-  clientId: process.env.ML_CLIENT_ID,
-  clientSecret: process.env.ML_CLIENT_SECRET,
-  redirectUri: process.env.ML_REDIRECT_URI,
-});
+const getEnv = () => {
+  console.log("CLIENT_ID:", process.env.ML_CLIENT_ID);
+  console.log("CLIENT_SECRET length:", process.env.ML_CLIENT_SECRET?.length);
+  console.log("REDIRECT_URI:", process.env.ML_REDIRECT_URI);
+  return {
+    clientId: process.env.ML_CLIENT_ID,
+    clientSecret: process.env.ML_CLIENT_SECRET,
+    redirectUri: process.env.ML_REDIRECT_URI,
+  };
+};
 
 // URL para iniciar OAuth
 export const getAuthUrl = () => {
