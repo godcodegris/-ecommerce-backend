@@ -1,4 +1,5 @@
 import "dotenv/config";
+console.log("ENV TEST:", process.env.ML_CLIENT_ID, process.env.ML_CLIENT_SECRET?.length, process.env.ML_REDIRECT_URI);
 import express from "express";
 import cors from "cors";
 
