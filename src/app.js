@@ -20,7 +20,7 @@ app.use(cors({
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("<h1>API funcionando correctamente</h1>");
+  res.send("EXPRESS APP.JS RUNNING");
 });
 
 app.get("/debug-env", (req, res) => {
