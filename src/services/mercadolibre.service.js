@@ -1,6 +1,13 @@
+import { randomBytes, createHash } from "crypto";
+
 const ML_BASE = "https://api.mercadolibre.com";
 const ML_AUTH = "https://auth.mercadolibre.com.ar/authorization";
 const ML_TOKEN = "https://api.mercadolibre.com/oauth/token";
+
+const generateCodeVerifier = () => randomBytes(32).toString("base64url");
+
+const generateCodeChallenge = (verifier) =>
+  createHash("sha256").update(verifier).digest("base64url");
 
 // Token storage (en producción usar BD)
 let tokens = {};
@@ -17,14 +24,18 @@ const getEnv = () => {
   };
 };
 
-// URL para iniciar OAuth
+// URL para iniciar OAuth con PKCE
 export const getAuthUrl = () => {
   const { clientId, redirectUri } = getEnv();
-  return `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=thundera`;
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = randomBytes(16).toString("hex");
+  const url = `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+  return { url, codeVerifier, state };
 };
 
-// Intercambiar code por access_token
-export const exchangeCode = async (code) => {
+// Intercambiar code por access_token (PKCE)
+export const exchangeCode = async (code, codeVerifier) => {
   const { clientId, clientSecret, redirectUri } = getEnv();
   try {
     const response = await fetch(ML_TOKEN, {
@@ -36,6 +47,7 @@ export const exchangeCode = async (code) => {
         client_secret: clientSecret,
         code: code,
         redirect_uri: redirectUri,
+        code_verifier: codeVerifier,
       }),
     });
 

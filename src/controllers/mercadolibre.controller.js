@@ -1,12 +1,16 @@
 import * as mlService from "../services/mercadolibre.service.js";
 
-// Redirigir a Mercado Libre para autorización
+// state → code_verifier (válido por una sola sesión)
+const pkceStore = new Map();
+
+// Redirigir a Mercado Libre para autorización (PKCE)
 export const iniciarAuth = (req, res) => {
-  const authUrl = mlService.getAuthUrl();
-  res.redirect(authUrl);
+  const { url, codeVerifier, state } = mlService.getAuthUrl();
+  pkceStore.set(state, codeVerifier);
+  res.redirect(url);
 };
 
-// Callback de Mercado Libre (recibe el code)
+// Callback de Mercado Libre (recibe el code, completa PKCE)
 export const authCallback = async (req, res) => {
   const { code, state } = req.query;
 
@@ -14,8 +18,15 @@ export const authCallback = async (req, res) => {
     return res.status(400).json({ error: "No se recibió código de autorización" });
   }
 
+  const codeVerifier = pkceStore.get(state);
+  pkceStore.delete(state);
+
+  if (!codeVerifier) {
+    return res.status(400).json({ error: "State inválido o expirado, iniciá el flujo desde /mercadolibre/auth" });
+  }
+
   try {
-    const tokens = await mlService.exchangeCode(code);
+    const tokens = await mlService.exchangeCode(code, codeVerifier);
     res.json({
       mensaje: "Autorización exitosa",
       user_id: tokens.user_id,
