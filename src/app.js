@@ -23,6 +23,15 @@ app.get("/", (req, res) => {
   res.send("<h1>API funcionando correctamente</h1>");
 });
 
+app.get("/debug-env", (req, res) => {
+  res.json({
+    ML_CLIENT_ID: process.env.ML_CLIENT_ID ? "✅ cargada" : "❌ undefined",
+    ML_CLIENT_SECRET: process.env.ML_CLIENT_SECRET ? "✅ cargada" : "❌ undefined",
+    ML_REDIRECT_URI: process.env.ML_REDIRECT_URI ? "✅ cargada" : "❌ undefined",
+    NODE_ENV: process.env.NODE_ENV,
+  });
+});
+
 app.use("/users", usersRouter);
 app.use("/products", productsRouter);
 app.use("/mercadolibre", mlRouter);
