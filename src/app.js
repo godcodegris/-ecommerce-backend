@@ -1,4 +1,13 @@
 import "dotenv/config";
+import pool from "./db.js";
+import { loadTokensFromDB } from "./services/mercadolibre.service.js";
+pool.query("SELECT NOW()")
+  .then(res => {
+    console.log("DB conectada:", res.rows[0]);
+  })
+  .catch(err => {
+    console.error("Error conectando a DB:", err);
+  });
 console.log("ENV TEST:", process.env.ML_CLIENT_ID, process.env.ML_CLIENT_SECRET?.length, process.env.ML_REDIRECT_URI);
 import express from "express";
 import cors from "cors";
@@ -38,4 +47,7 @@ app.use("/mercadolibre", mlRouter);
 app.use("/auth", mlRouter);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`http://localhost:${PORT}`));
+app.listen(PORT, async () => {
+  await loadTokensFromDB();
+  console.log(`http://localhost:${PORT}`);
+});

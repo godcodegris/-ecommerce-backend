@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from "crypto";
+import pool from "../db.js";
 
 const ML_BASE = "https://api.mercadolibre.com";
 const ML_AUTH = "https://auth.mercadolibre.com.ar/authorization";
@@ -11,6 +12,33 @@ const generateCodeChallenge = (verifier) =>
 
 // Token storage (en producción usar BD)
 let tokens = {};
+
+export const loadTokensFromDB = async () => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM ml_tokens
+       ORDER BY created_at DESC
+       LIMIT 1`
+    );
+
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+
+      tokens = {
+        access_token: row.access_token,
+        refresh_token: row.refresh_token,
+        expires_in: 21600,
+        created_at: row.created_at.getTime(),
+      };
+
+      console.log("Token cargado desde DB");
+    } else {
+      console.log("No hay tokens guardados en DB");
+    }
+  } catch (error) {
+    console.error("Error cargando tokens desde DB:", error);
+  }
+};
 
 // Leer env vars dentro de funciones (no al importar)
 const getEnv = () => {
@@ -30,13 +58,18 @@ export const getAuthUrl = () => {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   const state = randomBytes(16).toString("hex");
-  const url = `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+
+  const url = `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(
+    redirectUri
+  )}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+
   return { url, codeVerifier, state };
 };
 
 // Intercambiar code por access_token (PKCE)
 export const exchangeCode = async (code, codeVerifier) => {
   const { clientId, clientSecret, redirectUri } = getEnv();
+
   try {
     const response = await fetch(ML_TOKEN, {
       method: "POST",
@@ -53,6 +86,22 @@ export const exchangeCode = async (code, codeVerifier) => {
 
     const data = await response.json();
     console.log("Respuesta ML exchangeCode:", JSON.stringify(data, null, 2));
+
+    const expiresAt = new Date(Date.now() + data.expires_in * 1000);
+
+    console.log("Intentando guardar tokens en DB...");
+    console.log("access_token:", data.access_token?.slice(0,20));
+    console.log("refresh_token:", data.refresh_token?.slice(0,20));
+    console.log("expiresAt:", expiresAt);
+
+    const result = await pool.query(
+      `INSERT INTO ml_tokens (access_token, refresh_token, expires_at)
+       VALUES ($1,$2,$3) RETURNING id`,
+      [data.access_token, data.refresh_token, expiresAt]
+    );
+
+    console.log("INSERT ejecutado. ID creado:", result.rows[0]?.id);
+
     tokens = {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
@@ -60,16 +109,20 @@ export const exchangeCode = async (code, codeVerifier) => {
       expires_in: data.expires_in,
       created_at: Date.now(),
     };
+
+    console.log("Tokens guardados en memoria también.");
+
     return tokens;
+
   } catch (error) {
     console.error("Error exchanging code:", error);
     throw error;
   }
 };
-
 // Refrescar access_token
 export const refreshToken = async () => {
   const { clientId, clientSecret } = getEnv();
+
   try {
     const response = await fetch(ML_TOKEN, {
       method: "POST",
@@ -83,6 +136,7 @@ export const refreshToken = async () => {
     });
 
     const data = await response.json();
+
     tokens = {
       ...tokens,
       access_token: data.access_token,
@@ -90,6 +144,7 @@ export const refreshToken = async () => {
       expires_in: data.expires_in,
       created_at: Date.now(),
     };
+
     return tokens.access_token;
   } catch (error) {
     console.error("Error refreshing token:", error);
@@ -101,39 +156,47 @@ export const refreshToken = async () => {
 const getValidToken = async () => {
   const now = Date.now();
   const elapsed = (now - tokens.created_at) / 1000;
+
   if (elapsed > tokens.expires_in - 60) {
     return await refreshToken();
   }
+
   return tokens.access_token;
 };
 
 // Obtener perfil del usuario de ML
 export const getUserProfile = async () => {
   const token = await getValidToken();
+
   const response = await fetch(`${ML_BASE}/users/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
   return await response.json();
 };
 
 // Obtener productos del usuario (paginado)
 export const getUserProducts = async (userId, offset = 0, limit = 50) => {
   const token = await getValidToken();
+
   const response = await fetch(
     `${ML_BASE}/users/${userId}/items/search?offset=${offset}&limit=${limit}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     }
   );
+
   return await response.json();
 };
 
 // Obtener detalle de un producto por ID
 export const getProductDetail = async (itemId) => {
   const token = await getValidToken();
+
   const response = await fetch(`${ML_BASE}/items/${itemId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
   return await response.json();
 };
 
@@ -141,9 +204,11 @@ export const getProductDetail = async (itemId) => {
 export const getProductsBatch = async (itemIds) => {
   const token = await getValidToken();
   const idsParam = itemIds.join(",");
+
   const response = await fetch(`${ML_BASE}/items?ids=${idsParam}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
   return await response.json();
 };
 
@@ -156,8 +221,10 @@ export const getAllUserProducts = async (userId) => {
 
   while (hasMore) {
     const result = await getUserProducts(userId, offset, limit);
+
     if (result.results && result.results.length > 0) {
       const details = await getProductsBatch(result.results);
+
       for (const item of details) {
         if (item.body) {
           allProducts.push({
@@ -174,6 +241,7 @@ export const getAllUserProducts = async (userId) => {
           });
         }
       }
+
       offset += limit;
       hasMore = result.results.length === limit;
     } else {
@@ -185,4 +253,6 @@ export const getAllUserProducts = async (userId) => {
 };
 
 export const getTokens = () => tokens;
-export const setTokens = (newTokens) => { tokens = newTokens; };
+export const setTokens = (newTokens) => {
+  tokens = newTokens;
+};
