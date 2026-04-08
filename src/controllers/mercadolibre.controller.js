@@ -48,7 +48,7 @@ export const obtenerPerfil = async (req, res) => {
   }
 };
 
-// Obtener productos del usuario de ML
+// Obtener productos del usuario de ML (sin importar)
 export const obtenerProductosML = async (req, res) => {
   const { user_id } = req.query;
   const userId = user_id || mlService.getTokens().user_id;
@@ -69,7 +69,7 @@ export const obtenerProductosML = async (req, res) => {
   }
 };
 
-// Importar productos de ML a Firebase
+// ✅ Importar productos de ML a PostgreSQL
 export const importarProductos = async (req, res) => {
   const { user_id } = req.body;
   const userId = user_id || mlService.getTokens().user_id;
@@ -80,55 +80,14 @@ export const importarProductos = async (req, res) => {
 
   try {
     const productosML = await mlService.getAllUserProducts(userId);
-    const { db } = await import("../firebase.js");
-    const imported = [];
-    const errors = [];
-
-    for (const producto of productosML) {
-      try {
-        // Verificar si ya existe (por ML ID)
-        const existente = await db
-          .collection("productos")
-          .where("ml_id", "==", producto.id)
-          .get();
-
-        if (existente.empty) {
-          // Crear nuevo
-          const docRef = await db.collection("productos").add({
-            nombre: producto.nombre,
-            descripcion: producto.descripcion,
-            precio: producto.precio,
-            imagen: producto.imagen,
-            moneda: producto.moneda,
-            stock: producto.stock,
-            ml_id: producto.id,
-            ml_permalink: producto.permalink,
-            ml_categoria: producto.categoria,
-            importado_desde_ml: true,
-            fecha_importacion: new Date().toISOString(),
-          });
-          imported.push({ id: docRef.id, nombre: producto.nombre });
-        } else {
-          // Actualizar existente
-          const docId = existente.docs[0].id;
-          await db.collection("productos").doc(docId).update({
-            precio: producto.precio,
-            stock: producto.stock,
-            imagen: producto.imagen,
-            ultima_sincronizacion: new Date().toISOString(),
-          });
-          imported.push({ id: docId, nombre: producto.nombre, actualizado: true });
-        }
-      } catch (err) {
-        errors.push({ producto: producto.nombre, error: err.message });
-      }
-    }
+    const resultado = await mlService.saveProductsToDB(productosML);
 
     res.json({
-      mensaje: `Importación completada`,
-      importados: imported.length,
-      errores: errors.length,
-      detalles: { imported, errors },
+      mensaje: "Importación completada",
+      total: productosML.length,
+      insertados: resultado.insertados,
+      errores: resultado.errores.length,
+      detalles_errores: resultado.errores,
     });
   } catch (error) {
     console.error("Error importando productos:", error);

@@ -10,7 +10,6 @@ const generateCodeVerifier = () => randomBytes(32).toString("base64url");
 const generateCodeChallenge = (verifier) =>
   createHash("sha256").update(verifier).digest("base64url");
 
-// Token storage (en producción usar BD)
 let tokens = {};
 
 export const loadTokensFromDB = async () => {
@@ -23,14 +22,12 @@ export const loadTokensFromDB = async () => {
 
     if (result.rows.length > 0) {
       const row = result.rows[0];
-
       tokens = {
         access_token: row.access_token,
         refresh_token: row.refresh_token,
         expires_in: 21600,
         created_at: row.created_at.getTime(),
       };
-
       console.log("Token cargado desde DB");
     } else {
       console.log("No hay tokens guardados en DB");
@@ -40,7 +37,6 @@ export const loadTokensFromDB = async () => {
   }
 };
 
-// Leer env vars dentro de funciones (no al importar)
 const getEnv = () => {
   console.log("CLIENT_ID:", process.env.ML_CLIENT_ID);
   console.log("CLIENT_SECRET length:", process.env.ML_CLIENT_SECRET?.length);
@@ -52,7 +48,6 @@ const getEnv = () => {
   };
 };
 
-// URL para iniciar OAuth con PKCE
 export const getAuthUrl = () => {
   const { clientId, redirectUri } = getEnv();
   const codeVerifier = generateCodeVerifier();
@@ -66,7 +61,6 @@ export const getAuthUrl = () => {
   return { url, codeVerifier, state };
 };
 
-// Intercambiar code por access_token (PKCE)
 export const exchangeCode = async (code, codeVerifier) => {
   const { clientId, clientSecret, redirectUri } = getEnv();
 
@@ -90,8 +84,8 @@ export const exchangeCode = async (code, codeVerifier) => {
     const expiresAt = new Date(Date.now() + data.expires_in * 1000);
 
     console.log("Intentando guardar tokens en DB...");
-    console.log("access_token:", data.access_token?.slice(0,20));
-    console.log("refresh_token:", data.refresh_token?.slice(0,20));
+    console.log("access_token:", data.access_token?.slice(0, 20));
+    console.log("refresh_token:", data.refresh_token?.slice(0, 20));
     console.log("expiresAt:", expiresAt);
 
     const result = await pool.query(
@@ -111,7 +105,6 @@ export const exchangeCode = async (code, codeVerifier) => {
     };
 
     console.log("Tokens guardados en memoria también.");
-
     return tokens;
 
   } catch (error) {
@@ -119,7 +112,7 @@ export const exchangeCode = async (code, codeVerifier) => {
     throw error;
   }
 };
-// Refrescar access_token
+
 export const refreshToken = async () => {
   const { clientId, clientSecret } = getEnv();
 
@@ -136,6 +129,16 @@ export const refreshToken = async () => {
     });
 
     const data = await response.json();
+    console.log("Token refrescado:", data.access_token?.slice(0, 20));
+
+    const expiresAt = new Date(Date.now() + data.expires_in * 1000);
+    await pool.query(
+      `UPDATE ml_tokens 
+       SET access_token = $1, refresh_token = $2, expires_at = $3
+       WHERE id = (SELECT id FROM ml_tokens ORDER BY created_at DESC LIMIT 1)`,
+      [data.access_token, data.refresh_token, expiresAt]
+    );
+    console.log("Tokens actualizados en DB ✅");
 
     tokens = {
       ...tokens,
@@ -152,7 +155,6 @@ export const refreshToken = async () => {
   }
 };
 
-// Obtener token válido (refresca si expiró)
 const getValidToken = async () => {
   const now = Date.now();
   const elapsed = (now - tokens.created_at) / 1000;
@@ -164,7 +166,6 @@ const getValidToken = async () => {
   return tokens.access_token;
 };
 
-// Obtener perfil del usuario de ML
 export const getUserProfile = async () => {
   const token = await getValidToken();
 
@@ -175,21 +176,21 @@ export const getUserProfile = async () => {
   return await response.json();
 };
 
-// Obtener productos del usuario (paginado)
 export const getUserProducts = async (userId, offset = 0, limit = 50) => {
   const token = await getValidToken();
 
   const response = await fetch(
-    `${ML_BASE}/users/${userId}/items/search?offset=${offset}&limit=${limit}`,
+    `${ML_BASE}/users/${userId}/items/search?offset=${offset}&limit=${limit}&status=active`,
     {
       headers: { Authorization: `Bearer ${token}` },
     }
   );
 
-  return await response.json();
+  const data = await response.json();
+  console.log(`ML items/search offset=${offset} total=${data.paging?.total} resultados=${data.results?.length}`);
+  return data;
 };
 
-// Obtener detalle de un producto por ID
 export const getProductDetail = async (itemId) => {
   const token = await getValidToken();
 
@@ -200,7 +201,6 @@ export const getProductDetail = async (itemId) => {
   return await response.json();
 };
 
-// Obtener múltiples productos (batch)
 export const getProductsBatch = async (itemIds) => {
   const token = await getValidToken();
   const idsParam = itemIds.join(",");
@@ -212,7 +212,7 @@ export const getProductsBatch = async (itemIds) => {
   return await response.json();
 };
 
-// Obtener todos los productos del usuario (con paginación)
+// ✅ Con chunks de 20
 export const getAllUserProducts = async (userId) => {
   const allProducts = [];
   let offset = 0;
@@ -223,22 +223,32 @@ export const getAllUserProducts = async (userId) => {
     const result = await getUserProducts(userId, offset, limit);
 
     if (result.results && result.results.length > 0) {
-      const details = await getProductsBatch(result.results);
 
-      for (const item of details) {
-        if (item.body) {
-          allProducts.push({
-            id: item.body.id,
-            nombre: item.body.title,
-            descripcion: item.body.title,
-            precio: item.body.price,
-            imagen: item.body.thumbnail,
-            moneda: item.body.currency_id,
-            stock: item.body.available_quantity,
-            estado: item.body.status,
-            permalink: item.body.permalink,
-            categoria: item.body.category_id,
-          });
+      // ✅ Dividir en chunks de 20
+      const chunks = [];
+      for (let i = 0; i < result.results.length; i += 20) {
+        chunks.push(result.results.slice(i, i + 20));
+      }
+
+      for (const chunk of chunks) {
+        const details = await getProductsBatch(chunk);
+        const detailsArray = Array.isArray(details) ? details : [];
+
+        for (const item of detailsArray) {
+          if (item.body) {
+            allProducts.push({
+              id: item.body.id,
+              nombre: item.body.title,
+              descripcion: item.body.title,
+              precio: item.body.price,
+              imagen: item.body.thumbnail,
+              moneda: item.body.currency_id,
+              stock: item.body.available_quantity,
+              estado: item.body.status,
+              permalink: item.body.permalink,
+              categoria: item.body.category_id,
+            });
+          }
         }
       }
 
@@ -250,6 +260,32 @@ export const getAllUserProducts = async (userId) => {
   }
 
   return allProducts;
+};
+
+export const saveProductsToDB = async (products) => {
+  const results = { insertados: 0, actualizados: 0, errores: [] };
+
+  for (const p of products) {
+    try {
+      await pool.query(
+        `INSERT INTO ml_products (ml_id, title, price, currency_id, available_quantity, permalink, thumbnail)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (ml_id) DO UPDATE SET
+           title = EXCLUDED.title,
+           price = EXCLUDED.price,
+           currency_id = EXCLUDED.currency_id,
+           available_quantity = EXCLUDED.available_quantity,
+           permalink = EXCLUDED.permalink,
+           thumbnail = EXCLUDED.thumbnail`,
+        [p.id, p.nombre, p.precio, p.moneda, p.stock, p.permalink, p.imagen]
+      );
+      results.insertados++;
+    } catch (err) {
+      results.errores.push({ producto: p.nombre, error: err.message });
+    }
+  }
+
+  return results;
 };
 
 export const getTokens = () => tokens;
