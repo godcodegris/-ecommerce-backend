@@ -8,7 +8,7 @@ export const obtenerTodos = async () => {
       title AS nombre,
       title AS descripcion,
       price AS precio,
-      thumbnail AS imagen,
+      REPLACE(REPLACE(thumbnail, '-I.jpg', '-O.jpg'), '-I.webp', '-O.webp') AS imagen,
       currency_id AS moneda,
       available_quantity AS stock,
       permalink
@@ -26,7 +26,7 @@ export const obtenerPorId = async (id) => {
       title AS nombre,
       title AS descripcion,
       price AS precio,
-      thumbnail AS imagen,
+      REPLACE(REPLACE(thumbnail, '-I.jpg', '-O.jpg'), '-I.webp', '-O.webp') AS imagen,
       currency_id AS moneda,
       available_quantity AS stock,
       permalink
