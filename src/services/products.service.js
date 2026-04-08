@@ -2,14 +2,36 @@ import pool from '../db.js';
 
 export const obtenerTodos = async () => {
   const result = await pool.query(
-    `SELECT * FROM ml_products ORDER BY id ASC`
+    `SELECT 
+      id,
+      ml_id,
+      title AS nombre,
+      title AS descripcion,
+      price AS precio,
+      thumbnail AS imagen,
+      currency_id AS moneda,
+      available_quantity AS stock,
+      permalink
+     FROM ml_products 
+     ORDER BY id ASC`
   );
   return result.rows;
 };
 
 export const obtenerPorId = async (id) => {
   const result = await pool.query(
-    `SELECT * FROM ml_products WHERE id = $1`,
+    `SELECT 
+      id,
+      ml_id,
+      title AS nombre,
+      title AS descripcion,
+      price AS precio,
+      thumbnail AS imagen,
+      currency_id AS moneda,
+      available_quantity AS stock,
+      permalink
+     FROM ml_products 
+     WHERE id = $1`,
     [id]
   );
   return result.rows[0] || null;
