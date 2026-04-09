@@ -11,7 +11,8 @@ export const obtenerTodos = async () => {
       REPLACE(REPLACE(thumbnail, '-I.jpg', '-O.jpg'), '-I.webp', '-O.webp') AS imagen,
       currency_id AS moneda,
       available_quantity AS stock,
-      permalink
+      permalink,
+      categoria
      FROM ml_products 
      ORDER BY id ASC`
   );
@@ -29,7 +30,8 @@ export const obtenerPorId = async (id) => {
       REPLACE(REPLACE(thumbnail, '-I.jpg', '-O.jpg'), '-I.webp', '-O.webp') AS imagen,
       currency_id AS moneda,
       available_quantity AS stock,
-      permalink
+      permalink,
+      categoria
      FROM ml_products 
      WHERE id = $1`,
     [id]
