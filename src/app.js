@@ -1,4 +1,11 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import chatRouter from "./routes/chat.routes.js";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, "../.env") });
+
 import pool from "./db.js";
 import { loadTokensFromDB } from "./services/mercadolibre.service.js";
 pool.query("SELECT NOW()")
@@ -9,9 +16,9 @@ pool.query("SELECT NOW()")
     console.error("Error conectando a DB:", err);
   });
 console.log("ENV TEST:", process.env.ML_CLIENT_ID, process.env.ML_CLIENT_SECRET?.length, process.env.ML_REDIRECT_URI);
+
 import express from "express";
 import cors from "cors";
-
 import usersRouter from "./routes/users.routes.js";
 import productsRouter from "./routes/products.routes.js";
 import mlRouter from "./routes/mercadolibre.routes.js";
@@ -45,6 +52,7 @@ app.use("/users", usersRouter);
 app.use("/products", productsRouter);
 app.use("/mercadolibre", mlRouter);
 app.use("/auth", mlRouter);
+app.use("/chat", chatRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
