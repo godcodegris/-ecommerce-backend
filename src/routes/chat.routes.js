@@ -34,7 +34,8 @@ Ejemplos:
 
     const data = await response.json();
     const texto = data.content[0].text.trim();
-    return JSON.parse(texto);
+   const limpio = texto.replace(/```json|```/g, "").trim();
+return JSON.parse(limpio);
   } catch (error) {
     console.error("Error detectando intención:", error);
     return { categoria: null, busqueda: null };
