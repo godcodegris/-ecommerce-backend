@@ -26,12 +26,14 @@ import mlRouter from "./routes/mercadolibre.routes.js";
 const app = express();
 
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://ecommerce-backend-production-e9f1.up.railway.app",
-    "https://elojodethundera.netlify.app",
-  ],
+ origin: [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://ecommerce-backend-production-e9f1.up.railway.app",
+  "https://elojodethundera.netlify.app",
+  "https://elojodethundera.com",
+  "https://www.elojodethundera.com",
+],
 }));
 
 app.use(express.json());
