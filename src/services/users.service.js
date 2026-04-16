@@ -1,36 +1,24 @@
-let usuarios = [
-  { id: 1, nombre: "Pepa", mail: "tumail@gmail.com" },
-  {  id: 2, nombre: "Carlos", mail: "mimail@gmail.com"  },
-  { id: 3, nombre: "Pedro", mail: "pedro@gmail.com" }
-];
+import pool from "../db.js";
 
-export const obtenerTodos = () => {
-  return usuarios;
+export const obtenerTodos = async () => {
+  const result = await pool.query("SELECT id, email, created_at FROM users");
+  return result.rows;
 };
 
- export const obtenerPorId = (id) => {
-  return usuarios.find(u => u.id == id);
+export const obtenerPorId = async (id) => {
+  const result = await pool.query("SELECT id, email, created_at FROM users WHERE id = $1", [id]);
+  return result.rows[0];
 };
 
-export const crear = (datosDelNuevoUsuario) => {
-  const nuevoUsuario = {
-    id: usuarios.length + 1,
-    nombre: datosDelNuevoUsuario.nombre,
-    mail: datosDelNuevoUsuario.mail
-  };
-  usuarios.push(nuevoUsuario);
-  return nuevoUsuario;
+export const obtenerPorEmail = async (email) => {
+  const result = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+  return result.rows[0];
 };
 
-export const actualizar = (id, nuevosDatos) => {
-  const usuario = usuarios.find(u => u.id == id);
-  
-  usuario.nombre = nuevosDatos.nombre;
-  usuario.mail = nuevosDatos.mail;
-  return usuario;
-};
-
-export const eliminar = (id) => {
-  usuarios = usuarios.filter(u => u.id !== id);
-  return { mensaje: "Usuario eliminado", id };
+export const crearUsuario = async ({ email, password }) => {
+  const result = await pool.query(
+    "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
+    [email, password]
+  );
+  return result.rows[0];
 };
