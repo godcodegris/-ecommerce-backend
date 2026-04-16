@@ -263,10 +263,14 @@ export const getAllUserProducts = async (userId) => {
 };
 
 export const saveProductsToDB = async (products) => {
-  const results = { insertados: 0, actualizados: 0, errores: [] };
+  const results = { insertados: 0, actualizados: 0, eliminados: 0, errores: [] };
 
   for (const p of products) {
     try {
+      const existing = await pool.query(
+        `SELECT id FROM ml_products WHERE ml_id = $1`, [p.id]
+      );
+
       await pool.query(
         `INSERT INTO ml_products (ml_id, title, price, currency_id, available_quantity, permalink, thumbnail)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -279,10 +283,25 @@ export const saveProductsToDB = async (products) => {
            thumbnail = EXCLUDED.thumbnail`,
         [p.id, p.nombre, p.precio, p.moneda, p.stock, p.permalink, p.imagen]
       );
-      results.insertados++;
+
+      if (existing.rows.length > 0) {
+        results.actualizados++;
+      } else {
+        results.insertados++;
+      }
     } catch (err) {
       results.errores.push({ producto: p.nombre, error: err.message });
     }
+  }
+
+  // Borrar productos que ya no existen en ML
+  const mlIds = products.map(p => p.id);
+  if (mlIds.length > 0) {
+    const deleted = await pool.query(
+      `DELETE FROM ml_products WHERE ml_id != ALL($1::text[]) RETURNING ml_id`,
+      [mlIds]
+    );
+    results.eliminados = deleted.rowCount;
   }
 
   return results;
