@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
 import chatRouter from "./routes/chat.routes.js";
+import cron from "node-cron";
+import { getAllUserProducts, saveProductsToDB, loadTokensFromDB, getUserProfile } from "./services/mercadolibre.service.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 const __filename = fileURLToPath(import.meta.url);
@@ -61,4 +63,19 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   await loadTokensFromDB();
   console.log(`http://localhost:${PORT}`);
+
+  // Cron job: sincronizar productos cada 6 horas
+  cron.schedule("0 */6 * * *", async () => {
+    console.log("CRON: Iniciando sincronización de productos ML...");
+    try {
+      const profile = await getUserProfile();
+      const products = await getAllUserProducts(profile.id);
+      const result = await saveProductsToDB(products);
+      console.log("CRON: Sincronización completada:", result);
+    } catch (error) {
+      console.error("CRON: Error en sincronización:", error);
+    }
+  });
+
+  console.log("Cron job configurado: sincronización cada 6 horas");
 });
