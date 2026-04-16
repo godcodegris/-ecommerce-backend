@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, "../.env") });
 
 import pool from "./db.js";
-import { loadTokensFromDB } from "./services/mercadolibre.service.js";
+
 pool.query("SELECT NOW()")
   .then(res => {
     console.log("DB conectada:", res.rows[0]);
