@@ -337,8 +337,8 @@ export const publishProductFromJSON = async (productData) => {
 
   const data = await response.json();
 
-  if (data.error) {
-    throw new Error(`ML Error: ${data.message}`);
+if (data.error) {
+    throw new Error(`ML Error: ${JSON.stringify(data)}`);
   }
 
   return data;
