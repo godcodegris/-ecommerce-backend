@@ -230,7 +230,7 @@ export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
   const item = {
     title: productData.title,
-    category_id: productData.category_id || "MLA3422",
+    category_id: productData.category_id || "MLA3749",
     price: productData.price,
     currency_id: "ARS",
     available_quantity: productData.stock || 1,
