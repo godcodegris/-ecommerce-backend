@@ -230,7 +230,7 @@ export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
   const item = {
     title: productData.title,
-    category_id: productData.category_id || "MLA3749",
+    category_id: productData.category_id || "MLA3422",
     price: productData.price,
     currency_id: "ARS",
     available_quantity: productData.stock || 1,
@@ -238,6 +238,7 @@ export const publishProductFromJSON = async (productData) => {
     condition: productData.condition || "new",
     listing_type_id: "gold_pro",
     catalog_listing: false,
+    family_name: productData.title,
     description: { plain_text: productData.description || productData.title },
     pictures: productData.pictures ? productData.pictures.map((url) => ({ source: url })) : [],
     attributes: [
