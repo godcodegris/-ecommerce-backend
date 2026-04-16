@@ -15,11 +15,8 @@ let tokens = {};
 export const loadTokensFromDB = async () => {
   try {
     const result = await pool.query(
-      `SELECT * FROM ml_tokens
-       ORDER BY created_at DESC
-       LIMIT 1`
+      `SELECT * FROM ml_tokens ORDER BY created_at DESC LIMIT 1`
     );
-
     if (result.rows.length > 0) {
       const row = result.rows[0];
       tokens = {
@@ -38,9 +35,6 @@ export const loadTokensFromDB = async () => {
 };
 
 const getEnv = () => {
-  console.log("CLIENT_ID:", process.env.ML_CLIENT_ID);
-  console.log("CLIENT_SECRET length:", process.env.ML_CLIENT_SECRET?.length);
-  console.log("REDIRECT_URI:", process.env.ML_REDIRECT_URI);
   return {
     clientId: process.env.ML_CLIENT_ID,
     clientSecret: process.env.ML_CLIENT_SECRET,
@@ -53,17 +47,12 @@ export const getAuthUrl = () => {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   const state = randomBytes(16).toString("hex");
-
-  const url = `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(
-    redirectUri
-  )}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
-
+  const url = `${ML_AUTH}?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
   return { url, codeVerifier, state };
 };
 
 export const exchangeCode = async (code, codeVerifier) => {
   const { clientId, clientSecret, redirectUri } = getEnv();
-
   try {
     const response = await fetch(ML_TOKEN, {
       method: "POST",
@@ -77,25 +66,13 @@ export const exchangeCode = async (code, codeVerifier) => {
         code_verifier: codeVerifier,
       }),
     });
-
     const data = await response.json();
-    console.log("Respuesta ML exchangeCode:", JSON.stringify(data, null, 2));
-
     const expiresAt = new Date(Date.now() + data.expires_in * 1000);
-
-    console.log("Intentando guardar tokens en DB...");
-    console.log("access_token:", data.access_token?.slice(0, 20));
-    console.log("refresh_token:", data.refresh_token?.slice(0, 20));
-    console.log("expiresAt:", expiresAt);
-
     const result = await pool.query(
-      `INSERT INTO ml_tokens (access_token, refresh_token, expires_at)
-       VALUES ($1,$2,$3) RETURNING id`,
+      `INSERT INTO ml_tokens (access_token, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id`,
       [data.access_token, data.refresh_token, expiresAt]
     );
-
     console.log("INSERT ejecutado. ID creado:", result.rows[0]?.id);
-
     tokens = {
       access_token: data.access_token,
       refresh_token: data.refresh_token,
@@ -103,10 +80,7 @@ export const exchangeCode = async (code, codeVerifier) => {
       expires_in: data.expires_in,
       created_at: Date.now(),
     };
-
-    console.log("Tokens guardados en memoria también.");
     return tokens;
-
   } catch (error) {
     console.error("Error exchanging code:", error);
     throw error;
@@ -115,7 +89,6 @@ export const exchangeCode = async (code, codeVerifier) => {
 
 export const refreshToken = async () => {
   const { clientId, clientSecret } = getEnv();
-
   try {
     const response = await fetch(ML_TOKEN, {
       method: "POST",
@@ -127,27 +100,13 @@ export const refreshToken = async () => {
         refresh_token: tokens.refresh_token,
       }),
     });
-
     const data = await response.json();
-    console.log("Token refrescado:", data.access_token?.slice(0, 20));
-
     const expiresAt = new Date(Date.now() + data.expires_in * 1000);
     await pool.query(
-      `UPDATE ml_tokens 
-       SET access_token = $1, refresh_token = $2, expires_at = $3
-       WHERE id = (SELECT id FROM ml_tokens ORDER BY created_at DESC LIMIT 1)`,
+      `UPDATE ml_tokens SET access_token = $1, refresh_token = $2, expires_at = $3 WHERE id = (SELECT id FROM ml_tokens ORDER BY created_at DESC LIMIT 1)`,
       [data.access_token, data.refresh_token, expiresAt]
     );
-    console.log("Tokens actualizados en DB ✅");
-
-    tokens = {
-      ...tokens,
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_in: data.expires_in,
-      created_at: Date.now(),
-    };
-
+    tokens = { ...tokens, access_token: data.access_token, refresh_token: data.refresh_token, expires_in: data.expires_in, created_at: Date.now() };
     return tokens.access_token;
   } catch (error) {
     console.error("Error refreshing token:", error);
@@ -158,34 +117,26 @@ export const refreshToken = async () => {
 const getValidToken = async () => {
   const now = Date.now();
   const elapsed = (now - tokens.created_at) / 1000;
-
   if (elapsed > tokens.expires_in - 60) {
     return await refreshToken();
   }
-
   return tokens.access_token;
 };
 
 export const getUserProfile = async () => {
   const token = await getValidToken();
-
   const response = await fetch(`${ML_BASE}/users/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
   return await response.json();
 };
 
 export const getUserProducts = async (userId, offset = 0, limit = 50) => {
   const token = await getValidToken();
-
   const response = await fetch(
     `${ML_BASE}/users/${userId}/items/search?offset=${offset}&limit=${limit}&status=active`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
+    { headers: { Authorization: `Bearer ${token}` } }
   );
-
   const data = await response.json();
   console.log(`ML items/search offset=${offset} total=${data.paging?.total} resultados=${data.results?.length}`);
   return data;
@@ -193,47 +144,36 @@ export const getUserProducts = async (userId, offset = 0, limit = 50) => {
 
 export const getProductDetail = async (itemId) => {
   const token = await getValidToken();
-
   const response = await fetch(`${ML_BASE}/items/${itemId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
   return await response.json();
 };
 
 export const getProductsBatch = async (itemIds) => {
   const token = await getValidToken();
   const idsParam = itemIds.join(",");
-
   const response = await fetch(`${ML_BASE}/items?ids=${idsParam}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
   return await response.json();
 };
 
-// ✅ Con chunks de 20
 export const getAllUserProducts = async (userId) => {
   const allProducts = [];
   let offset = 0;
   const limit = 50;
   let hasMore = true;
-
   while (hasMore) {
     const result = await getUserProducts(userId, offset, limit);
-
     if (result.results && result.results.length > 0) {
-
-      // ✅ Dividir en chunks de 20
       const chunks = [];
       for (let i = 0; i < result.results.length; i += 20) {
         chunks.push(result.results.slice(i, i + 20));
       }
-
       for (const chunk of chunks) {
         const details = await getProductsBatch(chunk);
         const detailsArray = Array.isArray(details) ? details : [];
-
         for (const item of detailsArray) {
           if (item.body) {
             allProducts.push({
@@ -251,64 +191,43 @@ export const getAllUserProducts = async (userId) => {
           }
         }
       }
-
       offset += limit;
       hasMore = result.results.length === limit;
     } else {
       hasMore = false;
     }
   }
-
   return allProducts;
 };
 
 export const saveProductsToDB = async (products) => {
   const results = { insertados: 0, actualizados: 0, eliminados: 0, errores: [] };
-
   for (const p of products) {
     try {
-      const existing = await pool.query(
-        `SELECT id FROM ml_products WHERE ml_id = $1`, [p.id]
-      );
-
+      const existing = await pool.query(`SELECT id FROM ml_products WHERE ml_id = $1`, [p.id]);
       await pool.query(
         `INSERT INTO ml_products (ml_id, title, price, currency_id, available_quantity, permalink, thumbnail)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (ml_id) DO UPDATE SET
-           title = EXCLUDED.title,
-           price = EXCLUDED.price,
-           currency_id = EXCLUDED.currency_id,
-           available_quantity = EXCLUDED.available_quantity,
-           permalink = EXCLUDED.permalink,
-           thumbnail = EXCLUDED.thumbnail`,
+           title = EXCLUDED.title, price = EXCLUDED.price, currency_id = EXCLUDED.currency_id,
+           available_quantity = EXCLUDED.available_quantity, permalink = EXCLUDED.permalink, thumbnail = EXCLUDED.thumbnail`,
         [p.id, p.nombre, p.precio, p.moneda, p.stock, p.permalink, p.imagen]
       );
-
-      if (existing.rows.length > 0) {
-        results.actualizados++;
-      } else {
-        results.insertados++;
-      }
+      if (existing.rows.length > 0) { results.actualizados++; } else { results.insertados++; }
     } catch (err) {
       results.errores.push({ producto: p.nombre, error: err.message });
     }
   }
-
-  // Borrar productos que ya no existen en ML
   const mlIds = products.map(p => p.id);
   if (mlIds.length > 0) {
-    const deleted = await pool.query(
-      `DELETE FROM ml_products WHERE ml_id != ALL($1::text[]) RETURNING ml_id`,
-      [mlIds]
-    );
+    const deleted = await pool.query(`DELETE FROM ml_products WHERE ml_id != ALL($1::text[]) RETURNING ml_id`, [mlIds]);
     results.eliminados = deleted.rowCount;
   }
-
   return results;
 };
+
 export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
-
   const item = {
     title: productData.title,
     category_id: productData.category_id || "MLA3422",
@@ -318,33 +237,24 @@ export const publishProductFromJSON = async (productData) => {
     buying_mode: "buy_it_now",
     condition: productData.condition || "new",
     listing_type_id: "gold_special",
-    description: {
-      plain_text: productData.description || productData.title,
-    },
-    pictures: productData.pictures
-      ? productData.pictures.map((url) => ({ source: url }))
-      : [],
+    description: { plain_text: productData.description || productData.title },
+    pictures: productData.pictures ? productData.pictures.map((url) => ({ source: url })) : [],
+    attributes: [
+      { id: "BRAND", value_name: productData.brand || "Genérica" },
+      { id: "COLLECTION", value_name: productData.collection || "Otra" }
+    ],
   };
-
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify(item),
   });
-
   const data = await response.json();
-
-if (data.error) {
+  if (data.error) {
     throw new Error(`ML Error: ${JSON.stringify(data)}`);
   }
-
   return data;
 };
 
 export const getTokens = () => tokens;
-export const setTokens = (newTokens) => {
-  tokens = newTokens;
-};
+export const setTokens = (newTokens) => { tokens = newTokens; };
