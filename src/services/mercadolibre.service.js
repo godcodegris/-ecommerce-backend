@@ -236,7 +236,7 @@ export const publishProductFromJSON = async (productData) => {
     available_quantity: productData.stock || 1,
     buying_mode: "buy_it_now",
     condition: productData.condition || "new",
-    listing_type_id: "gold_special",
+    listing_type_id: "gold_pro",
     description: { plain_text: productData.description || productData.title },
     pictures: productData.pictures ? productData.pictures.map((url) => ({ source: url })) : [],
     attributes: [
