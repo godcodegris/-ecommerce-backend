@@ -27,6 +27,7 @@ export const registrar = async (req, res) => {
 };
 
 export const login = async (req, res) => {
+  console.log("JWT_SECRET:", process.env.JWT_SECRET);
   const { email, password } = req.body;
   const usuario = await userService.obtenerPorEmail(email);
   if (!usuario) return res.status(401).json({ message: "Credenciales inválidas" });
