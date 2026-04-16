@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as mlController from "../controllers/mercadolibre.controller.js";
+import { verificarToken } from "../middlewares/auth.js";
 
 const router = Router();
 
@@ -17,6 +18,8 @@ router.get("/productos", mlController.obtenerProductosML);
 
 // Importar productos de ML a la BD
 router.post("/importar", mlController.importarProductos);
+
+router.post("/publicar", verificarToken, mlController.publicarProducto);
 
 // Estado de conexión
 router.get("/estado", mlController.estadoConexion);

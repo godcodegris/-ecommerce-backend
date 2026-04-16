@@ -94,6 +94,19 @@ export const importarProductos = async (req, res) => {
     res.status(500).json({ error: "Error al importar productos" });
   }
 };
+export const publicarProducto = async (req, res) => {
+  try {
+    const resultado = await mlService.publishProductFromJSON(req.body);
+    res.json({
+      mensaje: "Producto publicado en MercadoLibre",
+      id: resultado.id,
+      permalink: resultado.permalink,
+    });
+  } catch (error) {
+    console.error("Error publicando producto:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
 
 // Estado de la conexión con ML
 export const estadoConexion = (req, res) => {
