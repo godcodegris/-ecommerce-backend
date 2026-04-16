@@ -8,6 +8,7 @@ router.get("/:id", userController.obtenerUsuarioPorId);
 
 
 router.post("/registrar", userController.registrar);
+router.post("/login", userController.login);
 
 router.post("/", (req, res) => {
   res.send("POST usuarios pendiente");
