@@ -2,7 +2,7 @@ import * as userService from "../services/users.service.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
-const SECRET = process.env.JWT_SECRET; 
+
 
 export const obtenerTodosLosUsuarios = async (req, res) => {
   const usuarios = await userService.obtenerTodos();
@@ -34,9 +34,9 @@ export const login = async (req, res) => {
   const passwordValida = await bcrypt.compare(password, usuario.password);
   if (!passwordValida) return res.status(401).json({ message: "Credenciales inválidas" });
 
-  const token = jwt.sign(
+const token = jwt.sign(
     { id: usuario.id, email: usuario.email },
-    SECRET,
+    process.env.JWT_SECRET,
     { expiresIn: "2h" }
   );
   res.json({ token });
