@@ -264,16 +264,19 @@ export const publishProductFromJSON = async (productData) => {
   let item;
 
   if (productData.catalog_product_id) {
-    // Modo catálogo — ML maneja todo, solo mandamos lo esencial
-    item = {
-      catalog_product_id: productData.catalog_product_id,
-      price: productData.price,
-      currency_id: "ARS",
-      available_quantity: productData.stock || 1,
-      buying_mode: "buy_it_now",
-      listing_type_id: "gold_pro",
-      condition: productData.condition || "new",
-    };
+  item = {
+    title: productData.title,
+    category_id: productData.category_id || "MLA3422",
+    family_name: productData.title,
+    catalog_product_id: productData.catalog_product_id,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new",
+  };
+}
   } else {
     // Modo libre
     item = {
