@@ -275,6 +275,11 @@ export const publishProductFromJSON = async (productData) => {
       buying_mode: "buy_it_now",
       listing_type_id: "gold_pro",
       condition: productData.condition || "new",
+       attributes: productData.attributes || [
+        { id: "BRAND", value_name: "Banpresto" },
+        { id: "COLLECTION", value_name: "Tom y Jerry" },
+        { id: "VALUE_ADDED_TAX", value_id: "48405909" },
+      ],
     };
   } else {
     item = {
