@@ -264,6 +264,7 @@ export const publishProductFromJSON = async (productData) => {
   const item = {
     title: productData.title,
     category_id: productData.category_id || "MLA432888",
+    catalog_listing: false,
     price: productData.price,
     currency_id: "ARS",
     available_quantity: productData.stock || 1,
