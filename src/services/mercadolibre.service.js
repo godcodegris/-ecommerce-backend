@@ -228,6 +228,7 @@ export const saveProductsToDB = async (products) => {
 
 export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
+
   const item = {
     title: productData.title,
     category_id: productData.category_id || "MLA3422",
@@ -237,24 +238,37 @@ export const publishProductFromJSON = async (productData) => {
     buying_mode: "buy_it_now",
     condition: productData.condition || "new",
     listing_type_id: "gold_pro",
-    catalog_listing: false,
-    family_name: productData.title,
     description: { plain_text: productData.description || productData.title },
-    pictures: productData.pictures ? productData.pictures.map((url) => ({ source: url })) : [],
+    pictures: productData.pictures
+      ? productData.pictures.map((url) => ({ source: url }))
+      : [],
     attributes: [
       { id: "BRAND", value_name: productData.brand || "Genérica" },
-      { id: "COLLECTION", value_name: productData.collection || "Otra" }
     ],
   };
+
+  // Si viene catalog_product_id, entra en modo catálogo
+  if (productData.catalog_product_id) {
+    item.catalog_product_id = productData.catalog_product_id;
+    // En modo catálogo ML ignora attributes custom, mejor sacarlo
+    delete item.attributes;
+  }
+
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(item),
   });
+
   const data = await response.json();
+
   if (data.error) {
-    throw new Error(`ML Error: ${JSON.stringify(data)}`);
+    throw new Error(`ML Error: ${data.message} — ${JSON.stringify(data.cause)}`);
   }
+
   return data;
 };
 
