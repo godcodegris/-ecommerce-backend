@@ -261,46 +261,21 @@ export const searchCatalogProduct = async (query) => {
 export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
 
-  let item;
-
-  if (productData.catalog_product_id) {
-    item = {
-      catalog_product_id: productData.catalog_product_id,
-      category_id: productData.category_id || "MLA3422",
-      family_name: productData.family_name,
-      price: productData.price,
-      currency_id: "ARS",
-      available_quantity: productData.stock || 1,
-      buying_mode: "buy_it_now",
-      listing_type_id: "gold_pro",
-      condition: productData.condition || "new",
-      attributes: productData.attributes || [],
-      pictures: productData.pictures
-        ? productData.pictures.map((url) => ({ source: url }))
-        : [],
-    };
-  
-  } else {
-    item = {
-      title: productData.title,
-      category_id: productData.category_id || "MLA3422",
-      price: productData.price,
-      currency_id: "ARS",
-      available_quantity: productData.stock || 1,
-      buying_mode: "buy_it_now",
-      condition: productData.condition || "new",
-      listing_type_id: "gold_pro",
-      description: { plain_text: productData.description || productData.title },
-      pictures: productData.pictures
-        ? productData.pictures.map((url) => ({ source: url }))
-        : [],
-      attributes: [
-        { id: "BRAND", value_name: productData.brand || "Genérica" },
-      ],
-    };
-  }
-
-  console.log("Enviando a ML:", JSON.stringify(item, null, 2));
+  const item = {
+    title: productData.title,
+    category_id: productData.category_id || "MLA432888",
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new",
+    description: { plain_text: productData.description || productData.title },
+    pictures: productData.pictures
+      ? productData.pictures.map((url) => ({ source: url }))
+      : [],
+    attributes: productData.attributes || [],
+  };
 
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
@@ -319,7 +294,6 @@ export const publishProductFromJSON = async (productData) => {
 
   return data;
 };
-
 
 export const getTokens = () => tokens;
 export const setTokens = (newTokens) => { tokens = newTokens; };
