@@ -275,6 +275,9 @@ export const publishProductFromJSON = async (productData) => {
       listing_type_id: "gold_pro",
       condition: productData.condition || "new",
       attributes: productData.attributes || [],
+      pictures: productData.pictures
+        ? productData.pictures.map((url) => ({ source: url }))
+        : [],
     };
   
   } else {
