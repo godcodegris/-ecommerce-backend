@@ -276,7 +276,7 @@ export const publishProductFromJSON = async (productData) => {
       condition: productData.condition || "new",
       attributes: productData.attributes || [],
     };
-  }
+  
   } else {
     item = {
       title: productData.title,
