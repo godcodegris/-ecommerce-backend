@@ -123,3 +123,12 @@ export const perfilML = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+export const tiposListing = async (req, res) => {
+  try {
+    const { category_id } = req.query;
+    const tipos = await mlService.getListingTypes(category_id || "MLA3422");
+    res.json(tipos);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

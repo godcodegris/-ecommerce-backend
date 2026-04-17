@@ -314,5 +314,15 @@ export const publishProductFromJSON = async (productData) => {
   return data;
 };
 
+
+
 export const getTokens = () => tokens;
 export const setTokens = (newTokens) => { tokens = newTokens; };
+export const getListingTypes = async (categoryId) => {
+  const token = await getValidToken();
+  const response = await fetch(
+    `${ML_BASE}/sites/MLA/listing_types?category_id=${categoryId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return await response.json();
+};

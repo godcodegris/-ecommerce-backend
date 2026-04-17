@@ -28,4 +28,6 @@ router.get("/buscar-catalogo", verificarToken, mlController.buscarCatalogo);
 
 router.get("/perfil", verificarToken, mlController.perfilML);
 
+router.get("/tipos-listing", verificarToken, mlController.tiposListing);
+
 export default router;
