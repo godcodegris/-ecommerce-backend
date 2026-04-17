@@ -263,7 +263,7 @@ export const publishProductFromJSON = async (productData) => {
 
   let item;
 
-if (productData.catalog_product_id) {
+  if (productData.catalog_product_id) {
     item = {
       catalog_product_id: productData.catalog_product_id,
       category_id: productData.category_id || "MLA3422",
@@ -275,7 +275,6 @@ if (productData.catalog_product_id) {
       condition: productData.condition || "new",
       attributes: productData.attributes || [],
     };
-  }
   } else {
     item = {
       title: productData.title,
@@ -295,6 +294,7 @@ if (productData.catalog_product_id) {
       ],
     };
   }
+
   console.log("Enviando a ML:", JSON.stringify(item, null, 2));
 
   const response = await fetch(`${ML_BASE}/items`, {
@@ -314,7 +314,6 @@ if (productData.catalog_product_id) {
 
   return data;
 };
-
 
 
 export const getTokens = () => tokens;
