@@ -301,24 +301,31 @@ export const publishProductFromJSON = async (productData) => {
   }
 
   if (!item) {
-   item = {
-  title: productData.title,
-  category_id: productData.category_id,
-  catalog_listing: false,
-  price: productData.price,
-  currency_id: "ARS",
-  available_quantity: productData.stock || 1,
-  buying_mode: "buy_it_now",
-  listing_type_id: "gold_pro",
-  condition: productData.condition || "new",
-  local_pick_up: true,
-  description: { plain_text: productData.description || productData.title },
-  pictures: productData.pictures
-    ? productData.pictures.map((url) => ({ source: url }))
-    : [],
-  video_id: productData.video_id || null,
-  attributes: attributes,
-};
+    const attributes = productData.attributes || [];
+    const tieneGTIN = attributes.some(a => a.id === "GTIN");
+    if (!tieneGTIN) {
+      attributes.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+    }
+
+    item = {
+      title: productData.title,
+      category_id: productData.category_id,
+      catalog_listing: false,
+      price: productData.price,
+      currency_id: "ARS",
+      available_quantity: productData.stock || 1,
+      buying_mode: "buy_it_now",
+      listing_type_id: "gold_pro",
+      condition: productData.condition || "new",
+      local_pick_up: true,
+      description: { plain_text: productData.description || productData.title },
+      pictures: productData.pictures
+        ? productData.pictures.map((url) => ({ source: url }))
+        : [],
+      video_id: productData.video_id || null,
+      attributes: attributes,
+    };
+  }
 
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
