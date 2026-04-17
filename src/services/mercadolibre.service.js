@@ -261,29 +261,38 @@ export const searchCatalogProduct = async (query) => {
 export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
 
-  const item = {
-    title: productData.title,
-    category_id: productData.category_id || "MLA3422",
-    price: productData.price,
-    currency_id: "ARS",
-    available_quantity: productData.stock || 1,
-    buying_mode: "buy_it_now",
-    condition: productData.condition || "new",
-    listing_type_id: "gold_pro",
-    description: { plain_text: productData.description || productData.title },
-    pictures: productData.pictures
-      ? productData.pictures.map((url) => ({ source: url }))
-      : [],
-    attributes: [
-      { id: "BRAND", value_name: productData.brand || "Genérica" },
-    ],
-  };
+  let item;
 
-  // Si viene catalog_product_id, entra en modo catálogo
   if (productData.catalog_product_id) {
-    item.catalog_product_id = productData.catalog_product_id;
-    // En modo catálogo ML ignora attributes custom, mejor sacarlo
-    delete item.attributes;
+    // Modo catálogo — ML maneja todo, solo mandamos lo esencial
+    item = {
+      catalog_product_id: productData.catalog_product_id,
+      price: productData.price,
+      currency_id: "ARS",
+      available_quantity: productData.stock || 1,
+      buying_mode: "buy_it_now",
+      listing_type_id: "gold_pro",
+      condition: productData.condition || "new",
+    };
+  } else {
+    // Modo libre
+    item = {
+      title: productData.title,
+      category_id: productData.category_id || "MLA3422",
+      price: productData.price,
+      currency_id: "ARS",
+      available_quantity: productData.stock || 1,
+      buying_mode: "buy_it_now",
+      condition: productData.condition || "new",
+      listing_type_id: "gold_pro",
+      description: { plain_text: productData.description || productData.title },
+      pictures: productData.pictures
+        ? productData.pictures.map((url) => ({ source: url }))
+        : [],
+      attributes: [
+        { id: "BRAND", value_name: productData.brand || "Genérica" },
+      ],
+    };
   }
 
   const response = await fetch(`${ML_BASE}/items`, {
