@@ -32,4 +32,6 @@ router.get("/tipos-listing", verificarToken, mlController.tiposListing);
 
 router.get("/catalogo/:id", verificarToken, mlController.infoCatalogo);
 
+router.post("/validar", verificarToken, mlController.validarItem);
+
 export default router;

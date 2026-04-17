@@ -142,3 +142,12 @@ export const infoCatalogo = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const validarItem = async (req, res) => {
+  try {
+    const resultado = await mlService.validateItem(req.body);
+    res.json(resultado);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

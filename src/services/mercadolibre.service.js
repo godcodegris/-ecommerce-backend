@@ -339,3 +339,17 @@ export const getCatalogProductInfo = async (catalogProductId) => {
   });
   return await response.json();
 };
+
+export const validateItem = async (itemData) => {
+  const token = await getValidToken();
+  const response = await fetch(`${ML_BASE}/items/validate`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(itemData),
+  });
+  const text = await response.text();
+  return { status: response.status, body: text };
+};
