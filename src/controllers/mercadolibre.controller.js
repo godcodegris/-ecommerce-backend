@@ -132,3 +132,13 @@ export const tiposListing = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const infoCatalogo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const info = await mlService.getCatalogProductInfo(id);
+    res.json(info);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

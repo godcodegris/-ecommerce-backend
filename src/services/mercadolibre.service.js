@@ -326,3 +326,10 @@ export const getListingTypes = async (categoryId) => {
   );
   return await response.json();
 };
+export const getCatalogProductInfo = async (catalogProductId) => {
+  const token = await getValidToken();
+  const response = await fetch(`${ML_BASE}/products/${catalogProductId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return await response.json();
+};

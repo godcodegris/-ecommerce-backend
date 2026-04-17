@@ -30,4 +30,6 @@ router.get("/perfil", verificarToken, mlController.perfilML);
 
 router.get("/tipos-listing", verificarToken, mlController.tiposListing);
 
+router.get("/catalogo/:id", verificarToken, mlController.infoCatalogo);
+
 export default router;
