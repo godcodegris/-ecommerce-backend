@@ -24,4 +24,6 @@ router.post("/publicar", verificarToken, mlController.publicarProducto);
 // Estado de conexión
 router.get("/estado", mlController.estadoConexion);
 
+router.get("/buscar-catalogo", verificarToken, mlController.buscarCatalogo);
+
 export default router;

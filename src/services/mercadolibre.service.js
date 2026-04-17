@@ -225,6 +225,38 @@ export const saveProductsToDB = async (products) => {
   }
   return results;
 };
+export const searchCatalogProduct = async (query) => {
+  const token = await getValidToken();
+
+  const response = await fetch(
+    `https://api.mercadolibre.com/products/search?site_id=MLA&q=${encodeURIComponent(query)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (data.code === "PA_UNAUTHORIZED_RESULT_FROM_POLICIES") {
+    throw new Error("Token de ML sin permisos para buscar en catálogo");
+  }
+
+  if (!data.results || data.results.length === 0) {
+    return null;
+  }
+
+  // Devuelve el primer resultado con su catalog_product_id y nombre
+  return {
+    catalog_product_id: data.results[0].id,
+    name: data.results[0].name,
+    all_results: data.results.slice(0, 5).map((r) => ({
+      id: r.id,
+      name: r.name,
+    })),
+  };
+};
 
 export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
