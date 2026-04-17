@@ -267,6 +267,7 @@ export const publishProductFromJSON = async (productData) => {
     item = {
       catalog_product_id: productData.catalog_product_id,
       category_id: productData.category_id || "MLA3422",
+      family_name: productData.family_name,
       price: productData.price,
       currency_id: "ARS",
       available_quantity: productData.stock || 1,
@@ -275,6 +276,7 @@ export const publishProductFromJSON = async (productData) => {
       condition: productData.condition || "new",
       attributes: productData.attributes || [],
     };
+  }
   } else {
     item = {
       title: productData.title,
