@@ -26,4 +26,6 @@ router.get("/estado", mlController.estadoConexion);
 
 router.get("/buscar-catalogo", verificarToken, mlController.buscarCatalogo);
 
+router.get("/perfil", verificarToken, mlController.perfilML);
+
 export default router;

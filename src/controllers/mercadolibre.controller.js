@@ -114,3 +114,12 @@ export const buscarCatalogo = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+export const perfilML = async (req, res) => {
+  try {
+    const perfil = await mlService.getUserProfile();
+    res.json(perfil);
+  } catch (error) {
+    console.error("Error obteniendo perfil ML:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
