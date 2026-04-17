@@ -303,7 +303,7 @@ export const publishProductFromJSON = async (productData) => {
   if (!item) {
     item = {
       title: productData.title,
-      category_id: productData.category_id || "MLA3422",
+      category_id: productData.category_id,
       catalog_listing: false,
       price: productData.price,
       currency_id: "ARS",
