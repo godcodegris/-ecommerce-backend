@@ -375,3 +375,65 @@ export const validateItem = async (itemData) => {
   const text = await response.text();
   return { status: response.status, body: text };
 };
+
+export const publicarMasivo = async (productos, descripcionDefault) => {
+  const resultados = { publicados: [], fallidos: [], pendientes_revision: [] };
+
+  for (const producto of productos) {
+    const descripcion = producto.descripcion || descripcionDefault;
+    const conditionFinal = "new";
+    const requiereRevision = producto.condition === "used";
+    const motivoRevision = requiereRevision
+      ? "condicion original: usado, publicado como nuevo para revision posterior"
+      : null;
+
+    try {
+      const productData = {
+        title: producto.title,
+        price: producto.price,
+        stock: producto.stock || 1,
+        condition: conditionFinal,
+        description: descripcion,
+        pictures: producto.pictures || [],
+        attributes: producto.attributes || [],
+        category_id: producto.category_id,
+      };
+
+      const mlResponse = await publishProductFromJSON(productData);
+
+      await pool.query(
+        `INSERT INTO publicaciones_masivas 
+         (titulo, ml_id, status, permalink, condition, price, requiere_revision, motivo_revision, confianza_condicion)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          producto.title,
+          mlResponse.id,
+          "ok",
+          mlResponse.permalink,
+          conditionFinal,
+          producto.price,
+          requiereRevision,
+          motivoRevision,
+          requiereRevision ? 60 : 95,
+        ]
+      );
+
+      const entry = { title: producto.title, ml_id: mlResponse.id, permalink: mlResponse.permalink };
+      if (requiereRevision) {
+        resultados.pendientes_revision.push({ ...entry, motivo: motivoRevision });
+      } else {
+        resultados.publicados.push(entry);
+      }
+
+    } catch (error) {
+      await pool.query(
+        `INSERT INTO publicaciones_masivas (titulo, status, error_msg, condition, price)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [producto.title, "error", error.message, conditionFinal, producto.price]
+      );
+      resultados.fallidos.push({ title: producto.title, error: error.message });
+    }
+  }
+
+  return resultados;
+};

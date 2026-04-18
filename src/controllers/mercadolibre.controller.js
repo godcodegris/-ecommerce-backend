@@ -151,3 +151,32 @@ export const validarItem = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const publicarMasivo = async (req, res) => {
+  try {
+    const { productos, descripcion_default } = req.body;
+
+    if (!productos || !Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ error: "El campo productos es requerido y debe ser un array" });
+    }
+
+    const resultado = await mlService.publicarMasivo(productos, descripcion_default || "");
+
+    res.json({
+      mensaje: "Publicación masiva completada",
+      resumen: {
+        total: productos.length,
+        publicados: resultado.publicados.length,
+        fallidos: resultado.fallidos.length,
+        pendientes_revision: resultado.pendientes_revision.length,
+      },
+      publicados: resultado.publicados,
+      fallidos: resultado.fallidos,
+      pendientes_revision: resultado.pendientes_revision,
+    });
+
+  } catch (error) {
+    console.error("Error en publicación masiva:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+};

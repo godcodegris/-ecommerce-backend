@@ -34,4 +34,6 @@ router.get("/catalogo/:id", verificarToken, mlController.infoCatalogo);
 
 router.post("/validar", verificarToken, mlController.validarItem);
 
+router.post("/publicar-masivo", verificarToken, mlController.publicarMasivo);
+
 export default router;
