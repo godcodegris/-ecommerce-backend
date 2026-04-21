@@ -84,6 +84,17 @@ app.get("/ml/test-new", async (req, res) => {
     res.json({ error: error.message });
   }
 });
+
+app.get("/ml/debug-search", async (req, res) => {
+  try {
+    const { searchCatalogProduct } = await import("./services/mercadolibre.service.js");
+    const titulo = req.query.title || "Funko Pop Spider-Man 593";
+    const resultado = await searchCatalogProduct(titulo);
+    res.json({ titulo_buscado: titulo, resultado });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
 app.listen(PORT, async () => {
   await loadTokensFromDB();
   console.log(`http://localhost:${PORT}`);
