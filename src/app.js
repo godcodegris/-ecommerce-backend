@@ -68,6 +68,7 @@ app.get("/ml/test-used", async (req, res) => {
     const result = await publishProductFromJSON({
       title: "TEST FIGURA SUPERMAN USADA NO COMPRAR",
       category_id: "MLA3530",
+      family_name: "figuras",
       price: 10000,
       condition: "used",
       pictures: [
