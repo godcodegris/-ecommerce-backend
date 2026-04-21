@@ -334,6 +334,7 @@ export const publishProductFromJSON = async (productData) => {
       attributes: attributes,
     };
   }
+  console.log("ITEM QUE SE ENVIA A ML:", JSON.stringify(item, null, 2));
 
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
