@@ -1,4 +1,6 @@
 import dotenv from "dotenv";
+
+import { publishProductFromJSON, loadTokensFromDB } from "./services/mercadolibre.service.js";
 import chatRouter from "./routes/chat.routes.js";
 import cron from "node-cron";
 import { getAllUserProducts, saveProductsToDB, loadTokensFromDB, getUserProfile } from "./services/mercadolibre.service.js";
@@ -60,6 +62,25 @@ app.use("/auth", mlRouter);
 app.use("/chat", chatRouter);
 
 const PORT = process.env.PORT || 3000;
+
+app.get("/ml/test-used", async (req, res) => {
+  try {
+    const result = await publishProductFromJSON({
+      title: "TEST FIGURA SUPERMAN USADA NO COMPRAR",
+      category_id: "MLA3530",
+      price: 10000,
+      condition: "used",
+      pictures: [
+        "https://http2.mlstatic.com/D_NQ_NP_2X_601910-MLA70706712619_072023-F.webp"
+      ]
+    });
+
+    res.json(result);
+
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
 app.listen(PORT, async () => {
   await loadTokensFromDB();
   console.log(`http://localhost:${PORT}`);
