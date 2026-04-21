@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { publishProductFromJSON, loadTokensFromDB } from "./services/mercadolibre.service.js";
 import chatRouter from "./routes/chat.routes.js";
 import cron from "node-cron";
-import { getAllUserProducts, saveProductsToDB, loadTokensFromDB, getUserProfile } from "./services/mercadolibre.service.js";
+import { getAllUserProducts, saveProductsToDB, getUserProfile } from "./services/mercadolibre.service.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 const __filename = fileURLToPath(import.meta.url);
