@@ -69,21 +69,17 @@ app.use("/chat", chatRouter);
 
 const PORT = process.env.PORT || 3000;
 
-app.get("/ml/test-used", async (req, res) => {
+app.get("/ml/test-new", async (req, res) => {
   try {
     const result = await publishProductFromJSON({
-      title: "TEST FIGURA SUPERMAN USADA NO COMPRAR",
+      title: "Funko Pop Batman 01",
       category_id: "MLA3530",
-      family_name: "figuras",
       price: 10000,
-      condition: "used",
-      pictures: [
-        "https://http2.mlstatic.com/D_NQ_NP_2X_601910-MLA70706712619_072023-F.webp"
-      ]
+      condition: "new",
+      pictures: []
     });
 
     res.json(result);
-
   } catch (error) {
     res.json({ error: error.message });
   }
