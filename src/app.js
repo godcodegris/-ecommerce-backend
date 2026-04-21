@@ -71,14 +71,14 @@ const PORT = process.env.PORT || 3000;
 
 app.get("/ml/test-new", async (req, res) => {
   try {
+    const titulo = req.query.title || "Funko Pop Batman 01";
     const result = await publishProductFromJSON({
-      title: "Funko Pop Batman 01",
+      title: titulo,
       category_id: "MLA3530",
-      price: 10000,
+      price: 999999,
       condition: "new",
       pictures: []
     });
-
     res.json(result);
   } catch (error) {
     res.json({ error: error.message });
