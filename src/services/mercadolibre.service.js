@@ -311,6 +311,7 @@ export const publishProductFromJSON = async (productData) => {
       title: productData.title,
       category_id: productData.category_id,
       catalog_listing: false,
+      family_name: productData.family_name || "figuras",
       price: productData.price,
       currency_id: "ARS",
       available_quantity: productData.stock || 1,
