@@ -271,47 +271,51 @@ export const publishProductFromJSON = async (productData) => {
 
   let item;
 
-  if (productData.condition !== "used") {
-    const catalogo = await searchCatalogProduct(productData.title);
-    
-    if (catalogo) {
-      const mejorResultado = catalogo.all_results.find(r => 
-        calcularSimilitud(productData.title, r.name) >= 0.8
-      );
+  // Buscar producto en catálogo siempre
+  const catalogo = await searchCatalogProduct(productData.title);
 
-      if (mejorResultado) {
-        const infoCatalogo = await getCatalogProductInfo(mejorResultado.id);
-        item = {
-          catalog_product_id: mejorResultado.id,
-          category_id: productData.category_id || "MLA3422",
-          family_name: infoCatalogo.family_name,
-          price: productData.price,
-          currency_id: "ARS",
-          available_quantity: productData.stock || 1,
-          buying_mode: "buy_it_now",
-          listing_type_id: "gold_pro",
-          condition: "new",
-          attributes: productData.attributes || [],
-          pictures: productData.pictures
-            ? productData.pictures.map((url) => ({ source: url }))
-            : [{ source: infoCatalogo.pictures[0].url }],
-        };
-      }
+  if (catalogo) {
+    const mejorResultado = catalogo.all_results.find((r) =>
+      calcularSimilitud(productData.title, r.name) >= 0.8
+    );
+
+    if (mejorResultado) {
+      const infoCatalogo = await getCatalogProductInfo(mejorResultado.id);
+
+      item = {
+        catalog_product_id: mejorResultado.id,
+        category_id: productData.category_id || "MLA3422",
+        family_name: infoCatalogo.family_name,
+        price: productData.price,
+        currency_id: "ARS",
+        available_quantity: productData.stock || 1,
+        buying_mode: "buy_it_now",
+        listing_type_id: "gold_pro",
+        condition: productData.condition || "new",
+        attributes: productData.attributes || [],
+        pictures: productData.pictures
+          ? productData.pictures.map((url) => ({ source: url }))
+          : [{ source: infoCatalogo.pictures[0].url }],
+      };
     }
   }
 
+  // fallback si no encuentra en catálogo
   if (!item) {
     const attributes = productData.attributes || [];
-    const tieneGTIN = attributes.some(a => a.id === "GTIN");
+    const tieneGTIN = attributes.some((a) => a.id === "GTIN");
+
     if (!tieneGTIN) {
-      attributes.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+      attributes.push({
+        id: "EMPTY_GTIN_REASON",
+        value_id: "17055160",
+      });
     }
 
     item = {
       title: productData.title,
       category_id: productData.category_id,
       catalog_listing: false,
-      
       price: productData.price,
       currency_id: "ARS",
       available_quantity: productData.stock || 1,
@@ -319,7 +323,9 @@ export const publishProductFromJSON = async (productData) => {
       listing_type_id: "gold_pro",
       condition: productData.condition || "new",
       local_pick_up: true,
-      description: { plain_text: productData.description || productData.title },
+      description: {
+        plain_text: productData.description || productData.title,
+      },
       pictures: productData.pictures
         ? productData.pictures.map((url) => ({ source: url }))
         : [],
@@ -340,7 +346,9 @@ export const publishProductFromJSON = async (productData) => {
   const data = await response.json();
 
   if (data.error) {
-    throw new Error(`ML Error: ${data.message} — ${JSON.stringify(data.cause)}`);
+    throw new Error(
+      `ML Error: ${data.message} — ${JSON.stringify(data.cause)}`
+    );
   }
 
   return data;
