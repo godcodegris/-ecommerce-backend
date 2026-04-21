@@ -282,21 +282,21 @@ export const publishProductFromJSON = async (productData) => {
     if (mejorResultado) {
       const infoCatalogo = await getCatalogProductInfo(mejorResultado.id);
 
-      item = {
-        catalog_product_id: mejorResultado.id,
-        category_id: productData.category_id || "MLA3422",
-        family_name: infoCatalogo.family_name,
-        price: productData.price,
-        currency_id: "ARS",
-        available_quantity: productData.stock || 1,
-        buying_mode: "buy_it_now",
-        listing_type_id: "gold_pro",
-        condition: productData.condition || "new",
-        attributes: productData.attributes || [],
-        pictures: productData.pictures
-          ? productData.pictures.map((url) => ({ source: url }))
-          : [{ source: infoCatalogo.pictures[0].url }],
-      };
+item = {
+  catalog_product_id: mejorResultado.id,
+  category_id: productData.category_id || "MLA3422",
+  family_name: infoCatalogo.family_name || mejorResultado.id,
+  price: productData.price,
+  currency_id: "ARS",
+  available_quantity: productData.stock || 1,
+  buying_mode: "buy_it_now",
+  listing_type_id: "gold_pro",
+  condition: productData.condition || "new",
+  attributes: productData.attributes || [],
+  pictures: productData.pictures
+    ? productData.pictures.map((url) => ({ source: url }))
+    : [{ source: infoCatalogo.pictures?.[0]?.url }],
+};
     }
   }
 
