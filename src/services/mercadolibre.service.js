@@ -281,6 +281,7 @@ export const publishProductFromJSON = async (productData) => {
 
     if (mejorResultado) {
       const infoCatalogo = await getCatalogProductInfo(mejorResultado.id);
+      console.log("INFO CATALOGO:", infoCatalogo);
 
 item = {
   catalog_product_id: mejorResultado.id,
