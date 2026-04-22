@@ -3,14 +3,13 @@ import multer from "multer";
 
 const router = express.Router();
 
-// Multer en memoria (la imagen no se guarda en disco, va directo a Claude)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB máx
 });
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages";
-const CLAUDE_MODEL = "claude-sonnet-4-5-20250929"; // Sonnet para Vision
+const CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
 
 const SYSTEM_PROMPT = `Sos un experto en coleccionables (Funkos, figuras, cards, cómics, vintage) que trabaja para Thundera Store, una tienda argentina.
 
@@ -62,82 +61,176 @@ Reglas para attributes:
 
 IMPORTANTE: Devolvé SOLO el JSON, sin backticks, sin "aquí tienes:", sin explicaciones adicionales.`;
 
+/**
+ * Función reutilizable: recibe un Buffer de imagen y su mime type,
+ * devuelve el JSON parseado de Vision.
+ * Usada por el endpoint /analyze Y por el orquestador /api/publish/create.
+ */
+export const analyzeImageWithVision = async (imageBuffer, mimeType) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY no configurada");
+  }
+
+  const base64Image = imageBuffer.toString("base64");
+
+  const response = await fetch(CLAUDE_API, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mimeType,
+                data: base64Image,
+              },
+            },
+            {
+              type: "text",
+              text: "Analizá esta foto del producto y devolvé el JSON.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+
+  if (data.type === "error") {
+    throw new Error(`Claude API: ${data.error?.message || "error desconocido"}`);
+  }
+
+  const responseText = data.content?.[0]?.text || "";
+  console.log("[analyzeImageWithVision] Respuesta raw:", responseText.substring(0, 200));
+
+  const cleanText = responseText.replace(/```json|```/g, "").trim();
+  try {
+    return JSON.parse(cleanText);
+  } catch (parseErr) {
+    throw new Error(`Claude devolvió formato inválido: ${responseText.substring(0, 200)}`);
+  }
+};
+
+// Endpoint HTTP (ahora es un wrapper simple sobre la función pura)
 router.post("/analyze", upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No se recibió imagen (campo 'image' requerido)" });
     }
-
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada" });
+    const result = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
+    return res.json(result);
+  } catch (error) {
+    console.error("[vision/analyze] Error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+// ===== Orquestador end-to-end: foto -> Vision -> publicar en ML + DB =====
+router.post("/create", upload.single("image"), async (req, res) => {
+  try {
+    // 1. Validar entrada
+    if (!req.file) {
+      return res.status(400).json({ error: "No se recibió imagen (campo 'image' requerido)" });
     }
 
-    // Convertir la imagen a base64 para mandarla a Claude
-    const base64Image = req.file.buffer.toString("base64");
-    const mediaType = req.file.mimetype; // "image/jpeg", "image/png", etc.
+    const price = parseFloat(req.body.price);
+    if (!price || price <= 0) {
+      return res.status(400).json({ error: "price es requerido y debe ser > 0" });
+    }
 
-    // Llamada a la API de Claude
-    const response = await fetch(CLAUDE_API, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: mediaType,
-                  data: base64Image,
-                },
-              },
-              {
-                type: "text",
-                text: "Analizá esta foto del producto y devolvé el JSON.",
-              },
-            ],
-          },
-        ],
-      }),
+    const stock = parseInt(req.body.stock) || 1;
+
+    // Imports dinámicos (acá para evitar ciclos si ya hubiera otros)
+    const mlService = await import("../services/mercadolibre.service.js");
+    const pool = (await import("../db.js")).default;
+
+    // 2. Analizar imagen con Vision
+    console.log("[publish/create] Iniciando análisis con Vision...");
+    const visionResult = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
+    console.log(`[publish/create] Vision detectó: "${visionResult.title}" (${visionResult.condition_detected}, ${visionResult.confidence}%)`);
+
+    // 3. Publicar en ML — SIEMPRE como "new" por limitación de la API
+    const mlResponse = await mlService.publishProductFromJSON({
+      title: visionResult.title,
+      price,
+      stock,
+      condition: "new",
+      description: visionResult.description,
+      pictures: [], // por ahora no subimos la foto al ML, usa las del catálogo
     });
 
-    const data = await response.json();
+    // 4. Determinar flags de revisión
+    const visionDetectedNotNew = visionResult.condition_detected !== "new";
 
-    if (data.type === "error") {
-      console.error("[vision/analyze] Error de Claude:", data.error);
-      return res.status(500).json({ error: `Claude API: ${data.error?.message || "error desconocido"}` });
-    }
+    // Caso A: no se encontró match de catálogo -> pendiente manual
+    if (mlResponse.requiere_revision_manual) {
+      await pool.query(
+        `INSERT INTO publicaciones_masivas 
+         (titulo, status, condition, price, requiere_revision, motivo_revision, confianza_condicion)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          visionResult.title,
+          "pendiente_manual",
+          "new",
+          price,
+          true,
+          `Sin match de catálogo. Vision detectó: ${visionResult.condition_detected}`,
+          visionResult.confidence,
+        ]
+      );
 
-    // Extraer el texto de la respuesta
-    const responseText = data.content?.[0]?.text || "";
-    console.log("[vision/analyze] Respuesta raw:", responseText.substring(0, 300));
-
-    // Parsear JSON (por si Claude mete backticks sin querer, los sacamos)
-    const cleanText = responseText.replace(/```json|```/g, "").trim();
-    let parsed;
-    try {
-      parsed = JSON.parse(cleanText);
-    } catch (parseErr) {
-      console.error("[vision/analyze] No se pudo parsear JSON:", cleanText);
-      return res.status(500).json({
-        error: "Claude devolvió formato inválido",
-        raw: responseText,
+      return res.json({
+        status: "pendiente_manual",
+        motivo: mlResponse.mensaje,
+        vision_result: visionResult,
       });
     }
 
-    return res.json(parsed);
+    // Caso B: publicado OK
+    const motivoRevision = visionDetectedNotNew
+      ? `Vision detectó "${visionResult.condition_detected}", cambiar en ML web`
+      : null;
+
+    await pool.query(
+      `INSERT INTO publicaciones_masivas 
+       (titulo, ml_id, status, permalink, condition, price, requiere_revision, motivo_revision, confianza_condicion)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        visionResult.title,
+        mlResponse.id,
+        "ok",
+        mlResponse.permalink,
+        "new",
+        price,
+        visionDetectedNotNew,
+        motivoRevision,
+        visionResult.confidence,
+      ]
+    );
+
+    return res.json({
+      status: "publicado",
+      ml_id: mlResponse.id,
+      permalink: mlResponse.permalink,
+      requiere_revision: visionDetectedNotNew,
+      motivo_revision: motivoRevision,
+      catalog_match: mlResponse.catalog_match_name || null,
+      vision_result: visionResult,
+    });
   } catch (error) {
-    console.error("[vision/analyze] Error:", error);
+    console.error("[publish/create] Error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 });
