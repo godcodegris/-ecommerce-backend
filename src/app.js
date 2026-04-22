@@ -32,6 +32,7 @@ import cors from "cors";
 import usersRouter from "./routes/users.routes.js";
 import productsRouter from "./routes/products.routes.js";
 import mlRouter from "./routes/mercadolibre.routes.js";
+import visionRouter from "./routes/vision.routes.js";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use("/products", productsRouter);
 app.use("/mercadolibre", mlRouter);
 app.use("/auth", mlRouter);
 app.use("/chat", chatRouter);
+app.use("/api/publish", visionRouter);
 
 const PORT = process.env.PORT || 3000;
 
