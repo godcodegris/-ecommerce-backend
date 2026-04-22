@@ -85,6 +85,33 @@ app.get("/ml/test-new", async (req, res) => {
   }
 });
 
+app.post("/ml/publish-one", async (req, res) => {
+  try {
+    const { title, price, stock, condition, description, pictures } = req.body || {};
+
+    // Validación básica
+    if (!title || typeof title !== "string") {
+      return res.status(400).json({ error: "title es requerido (string)" });
+    }
+    if (!price || typeof price !== "number" || price <= 0) {
+      return res.status(400).json({ error: "price es requerido (number > 0)" });
+    }
+
+    const result = await publishProductFromJSON({
+      title,
+      price,
+      stock: stock || 1,
+      condition: condition || "new",
+      description,
+      pictures: pictures || [],
+    });
+
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/ml/debug-search", async (req, res) => {
   try {
     const { searchCatalogProduct } = await import("./services/mercadolibre.service.js");

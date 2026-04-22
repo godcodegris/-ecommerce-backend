@@ -308,35 +308,30 @@ const calcularSimilitud = (str1, str2) => {
 
 // 3. Traer info del catálogo para obtener category_id
  // 3. Traer info del catálogo para obtener category_id
-let categoryIdFromCatalog = null;
+// Obtener category_id del catálogo (necesario para el POST)
+  let categoryIdFromCatalog = null;
   try {
     const catalogInfo = await getCatalogProductInfo(catalogMatch.catalog_product_id);
 
-    // Intento 1: campos directos del catálogo
+    // ML no siempre expone category_id en /products/:id. Probamos campos directos primero.
     categoryIdFromCatalog =
       catalogInfo.category_id ||
       catalogInfo.settings?.category_id ||
       null;
 
-    // Intento 2: mapear domain_id -> category_id vía el endpoint de domains
-   // Intento 2: usar domain_discovery para mapear el título -> category_id
+    // Fallback: domain_discovery mapea título -> category_id (es lo que usa ML web).
     if (!categoryIdFromCatalog) {
       const discoveryResp = await fetch(
         `${ML_BASE}/sites/MLA/domain_discovery/search?limit=1&q=${encodeURIComponent(productData.title)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const discoveryData = await discoveryResp.json();
-      console.log(
-        `[publishProductFromJSON] domain_discovery:`,
-        JSON.stringify(discoveryData).substring(0, 400)
-      );
       if (Array.isArray(discoveryData) && discoveryData.length > 0) {
         categoryIdFromCatalog = discoveryData[0].category_id || null;
       }
     }
-    console.log(`[publishProductFromJSON] category_id final: ${categoryIdFromCatalog}`);
   } catch (err) {
-    console.warn("[publishProductFromJSON] No se pudo obtener info del catálogo:", err.message);
+    console.warn("[publishProductFromJSON] No se pudo obtener category_id:", err.message);
   }
 
   // 4. Publicar con catalog_product_id + category_id
