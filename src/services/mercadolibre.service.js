@@ -258,83 +258,69 @@ export const searchCatalogProduct = async (query) => {
   };
 };
 
+const normalizar = (str) =>
+  str
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // saca acentos
+    .replace(/[^\w\s]/g, " ") // saca guiones, comas, etc
+    .replace(/\s+/g, " ")
+    .trim();
+
 const calcularSimilitud = (str1, str2) => {
-  const s1 = str1.toLowerCase();
-  const s2 = str2.toLowerCase();
-  const words1 = s1.split(" ");
-  const coincidencias = words1.filter(word => s2.includes(word) && word.length > 2).length;
+  const s1 = normalizar(str1);
+  const s2 = normalizar(str2);
+  const words1 = s1.split(" ").filter(w => w.length > 2);
+  if (words1.length === 0) return 0;
+  const coincidencias = words1.filter(word => s2.includes(word)).length;
   return coincidencias / words1.length;
 };
-
-export const publishProductFromJSON = async (productData) => {
+ export const publishProductFromJSON = async (productData) => {
   const token = await getValidToken();
+  const UMBRAL_SIMILITUD = 0.6;
 
-  let item;
-
-  // DESACTIVAMOS temporalmente la búsqueda en catálogo
-  // para evitar el error de family_name
-  const catalogo = null;
-
-  if (catalogo) {
-    const mejorResultado = catalogo.all_results.find((r) =>
-      calcularSimilitud(productData.title, r.name) >= 0.8
-    );
-
-    if (mejorResultado) {
-      const infoCatalogo = await getCatalogProductInfo(mejorResultado.id);
-
-      item = {
-        catalog_product_id: mejorResultado.id,
-        category_id: productData.category_id || "MLA3422",
-        family_name: infoCatalogo.family_name,
-        price: productData.price,
-        currency_id: "ARS",
-        available_quantity: productData.stock || 1,
-        buying_mode: "buy_it_now",
-        listing_type_id: "gold_pro",
-        condition: productData.condition || "new",
-        attributes: productData.attributes || [],
-        pictures: productData.pictures
-          ? productData.pictures.map((url) => ({ source: url }))
-          : [{ source: infoCatalogo.pictures?.[0]?.url }],
-      };
+  // 1. Buscar en catálogo
+  let catalogMatch = null;
+  try {
+    const searchResult = await searchCatalogProduct(productData.title);
+    if (searchResult && searchResult.all_results.length > 0) {
+      // Validar similitud contra el primer resultado
+      const similitud = calcularSimilitud(productData.title, searchResult.name);
+      console.log(
+        `[publishProductFromJSON] Búsqueda "${productData.title}" -> match "${searchResult.name}" (similitud: ${similitud.toFixed(2)})`
+      );
+      if (similitud >= UMBRAL_SIMILITUD) {
+        catalogMatch = searchResult;
+      }
     }
+  } catch (err) {
+    console.warn("[publishProductFromJSON] Search de catálogo falló:", err.message);
   }
 
-  // fallback (publicación normal sin catálogo)
-  if (!item) {
-    const attributes = productData.attributes || [];
-    const tieneGTIN = attributes.some((a) => a.id === "GTIN");
-
-    if (!tieneGTIN) {
-      attributes.push({
-        id: "EMPTY_GTIN_REASON",
-        value_id: "17055160",
-      });
-    }
-
-    item = {
-      title: productData.title,
-      category_id: productData.category_id,
-      catalog_listing: false,
-      price: productData.price,
-      currency_id: "ARS",
-      available_quantity: productData.stock || 1,
-      buying_mode: "buy_it_now",
-      listing_type_id: "gold_pro",
-      condition: productData.condition || "new",
-      local_pick_up: true,
-      description: {
-        plain_text: productData.description || productData.title,
-      },
-      pictures: productData.pictures
-        ? productData.pictures.map((url) => ({ source: url }))
-        : [],
-      video_id: productData.video_id || null,
-      attributes: attributes,
+  // 2. Si no hay match de catálogo -> pendiente de revisión manual
+  if (!catalogMatch) {
+    return {
+      requiere_revision_manual: true,
+      motivo: "sin_match_catalogo",
+      mensaje: `No se encontró match de catálogo para "${productData.title}" con similitud >= ${UMBRAL_SIMILITUD}`,
     };
   }
-  console.log("ITEM QUE SE ENVIA A ML:", JSON.stringify(item, null, 2));
+
+  // 3. Publicar con catalog_product_id
+  const item = {
+    catalog_product_id: catalogMatch.catalog_product_id,
+    catalog_listing: true,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new",
+  };
+
+  // Pictures solo si hay (ML puede tomar las del catálogo si no mandás)
+  if (productData.pictures && productData.pictures.length > 0) {
+    item.pictures = productData.pictures.map(url => ({ source: url }));
+  }
 
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
@@ -353,7 +339,10 @@ export const publishProductFromJSON = async (productData) => {
     );
   }
 
-  return data;
+  return {
+    ...data,
+    catalog_match_name: catalogMatch.name,
+  };
 };
 export const getTokens = () => tokens;
 export const setTokens = (newTokens) => { tokens = newTokens; };
@@ -410,8 +399,31 @@ export const publicarMasivo = async (productos, descripcionDefault) => {
         category_id: producto.category_id,
       };
 
-      const mlResponse = await publishProductFromJSON(productData);
+     const mlResponse = await publishProductFromJSON(productData);
 
+      // Caso: no se encontró match de catálogo -> pendiente manual
+      if (mlResponse.requiere_revision_manual) {
+        await pool.query(
+          `INSERT INTO publicaciones_masivas 
+           (titulo, status, condition, price, requiere_revision, motivo_revision)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            producto.title,
+            "pendiente_manual",
+            conditionFinal,
+            producto.price,
+            true,
+            mlResponse.motivo,
+          ]
+        );
+        resultados.pendientes_revision.push({
+          title: producto.title,
+          motivo: mlResponse.mensaje,
+        });
+        continue;
+      }
+
+      // Caso: publicado ok
       await pool.query(
         `INSERT INTO publicaciones_masivas 
          (titulo, ml_id, status, permalink, condition, price, requiere_revision, motivo_revision, confianza_condicion)
