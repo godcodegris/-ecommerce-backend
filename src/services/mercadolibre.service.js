@@ -308,17 +308,19 @@ const calcularSimilitud = (str1, str2) => {
 
 // 3. Traer info del catálogo para obtener category_id
  // 3. Traer info del catálogo para obtener category_id
-  let categoryIdFromCatalog = null;
+ let categoryIdFromCatalog = null;
   try {
     const catalogInfo = await getCatalogProductInfo(catalogMatch.catalog_product_id);
-    console.log(`[publishProductFromJSON] catalogInfo keys:`, Object.keys(catalogInfo));
-    console.log(`[publishProductFromJSON] catalogInfo completo:`, JSON.stringify(catalogInfo).substring(0, 1500));
+    // ML devuelve category_id en varios lugares según el catálogo. Probamos todos:
     categoryIdFromCatalog =
       catalogInfo.category_id ||
-      catalogInfo.parent_id ||
-      catalogInfo.domain_id ||
+      catalogInfo.settings?.category_id ||
+      catalogInfo.settings?.listing?.category_id ||
       null;
-    console.log(`[publishProductFromJSON] category_id del catálogo: ${categoryIdFromCatalog}`);
+    console.log(`[publishProductFromJSON] category_id encontrado: ${categoryIdFromCatalog}`);
+    if (!categoryIdFromCatalog) {
+      console.log(`[publishProductFromJSON] settings:`, JSON.stringify(catalogInfo.settings || {}).substring(0, 500));
+    }
   } catch (err) {
     console.warn("[publishProductFromJSON] No se pudo obtener info del catálogo:", err.message);
   }
