@@ -305,7 +305,7 @@ const calcularSimilitud = (str1, str2) => {
     };
   }
 
-  // 3. Publicar con catalog_product_id
+
 // 3. Traer info del catálogo para obtener category_id
   let categoryIdFromCatalog = null;
   try {
