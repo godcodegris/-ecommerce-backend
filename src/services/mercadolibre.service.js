@@ -306,6 +306,17 @@ const calcularSimilitud = (str1, str2) => {
   }
 
   // 3. Publicar con catalog_product_id
+// 3. Traer info del catálogo para obtener category_id
+  let categoryIdFromCatalog = null;
+  try {
+    const catalogInfo = await getCatalogProductInfo(catalogMatch.catalog_product_id);
+    categoryIdFromCatalog = catalogInfo.category_id || catalogInfo.parent_id || null;
+    console.log(`[publishProductFromJSON] category_id del catálogo: ${categoryIdFromCatalog}`);
+  } catch (err) {
+    console.warn("[publishProductFromJSON] No se pudo obtener info del catálogo:", err.message);
+  }
+
+  // 4. Publicar con catalog_product_id + category_id
   const item = {
     catalog_product_id: catalogMatch.catalog_product_id,
     catalog_listing: true,
@@ -316,6 +327,10 @@ const calcularSimilitud = (str1, str2) => {
     listing_type_id: "gold_pro",
     condition: productData.condition || "new",
   };
+
+  if (categoryIdFromCatalog) {
+    item.category_id = categoryIdFromCatalog;
+  }
 
   // Pictures solo si hay (ML puede tomar las del catálogo si no mandás)
   if (productData.pictures && productData.pictures.length > 0) {
