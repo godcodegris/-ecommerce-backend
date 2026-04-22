@@ -308,19 +308,37 @@ const calcularSimilitud = (str1, str2) => {
 
 // 3. Traer info del catálogo para obtener category_id
  // 3. Traer info del catálogo para obtener category_id
- let categoryIdFromCatalog = null;
+let categoryIdFromCatalog = null;
   try {
     const catalogInfo = await getCatalogProductInfo(catalogMatch.catalog_product_id);
-    // ML devuelve category_id en varios lugares según el catálogo. Probamos todos:
+
+    // Intento 1: campos directos del catálogo
     categoryIdFromCatalog =
       catalogInfo.category_id ||
       catalogInfo.settings?.category_id ||
-      catalogInfo.settings?.listing?.category_id ||
       null;
-    console.log(`[publishProductFromJSON] category_id encontrado: ${categoryIdFromCatalog}`);
-    if (!categoryIdFromCatalog) {
-      console.log(`[publishProductFromJSON] settings:`, JSON.stringify(catalogInfo.settings || {}).substring(0, 500));
+
+    // Intento 2: mapear domain_id -> category_id vía el endpoint de domains
+    if (!categoryIdFromCatalog && catalogInfo.domain_id) {
+      const domainResp = await fetch(
+        `${ML_BASE}/domains/${catalogInfo.domain_id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const domainData = await domainResp.json();
+      console.log(
+        `[publishProductFromJSON] domain ${catalogInfo.domain_id} keys:`,
+        Object.keys(domainData || {})
+      );
+
+      // Los endpoints de domain de ML exponen la category en distintos campos según versión
+      categoryIdFromCatalog =
+        domainData?.category_id ||
+        domainData?.category?.id ||
+        domainData?.metadata?.category_id ||
+        null;
     }
+
+    console.log(`[publishProductFromJSON] category_id final: ${categoryIdFromCatalog}`);
   } catch (err) {
     console.warn("[publishProductFromJSON] No se pudo obtener info del catálogo:", err.message);
   }
