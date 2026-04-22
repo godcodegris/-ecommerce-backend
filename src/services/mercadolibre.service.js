@@ -319,25 +319,21 @@ let categoryIdFromCatalog = null;
       null;
 
     // Intento 2: mapear domain_id -> category_id vía el endpoint de domains
-    if (!categoryIdFromCatalog && catalogInfo.domain_id) {
-      const domainResp = await fetch(
-        `${ML_BASE}/domains/${catalogInfo.domain_id}`,
+   // Intento 2: usar domain_discovery para mapear el título -> category_id
+    if (!categoryIdFromCatalog) {
+      const discoveryResp = await fetch(
+        `${ML_BASE}/sites/MLA/domain_discovery/search?limit=1&q=${encodeURIComponent(productData.title)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      const domainData = await domainResp.json();
+      const discoveryData = await discoveryResp.json();
       console.log(
-        `[publishProductFromJSON] domain ${catalogInfo.domain_id} keys:`,
-        Object.keys(domainData || {})
+        `[publishProductFromJSON] domain_discovery:`,
+        JSON.stringify(discoveryData).substring(0, 400)
       );
-
-      // Los endpoints de domain de ML exponen la category en distintos campos según versión
-      categoryIdFromCatalog =
-        domainData?.category_id ||
-        domainData?.category?.id ||
-        domainData?.metadata?.category_id ||
-        null;
+      if (Array.isArray(discoveryData) && discoveryData.length > 0) {
+        categoryIdFromCatalog = discoveryData[0].category_id || null;
+      }
     }
-
     console.log(`[publishProductFromJSON] category_id final: ${categoryIdFromCatalog}`);
   } catch (err) {
     console.warn("[publishProductFromJSON] No se pudo obtener info del catálogo:", err.message);
