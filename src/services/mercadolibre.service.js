@@ -452,6 +452,10 @@ export const publishProductAsFreeListing = async (
       id: "MODEL",
       value_name: visionAttrs.alphanumeric_model || "Genérico",
     },
+    {
+      id: "FAMILY_NAME",
+      value_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
+    },
   ];
 
   // 4. Construir payload
