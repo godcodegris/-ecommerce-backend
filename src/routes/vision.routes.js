@@ -139,6 +139,12 @@ router.post("/analyze", upload.single("image"), async (req, res) => {
 });
 // ===== Orquestador end-to-end: foto -> Vision -> publicar en ML + DB =====
 router.post("/create", upload.single("image"), async (req, res) => {
+  let publicacionId = null;
+
+  // Imports dinámicos (mantengo tu patrón existente)
+  const mlService = await import("../services/mercadolibre.service.js");
+  const pool = (await import("../db.js")).default;
+
   try {
     // 1. Validar entrada
     if (!req.file) {
@@ -152,86 +158,123 @@ router.post("/create", upload.single("image"), async (req, res) => {
 
     const stock = parseInt(req.body.stock) || 1;
 
-    // Imports dinámicos (acá para evitar ciclos si ya hubiera otros)
-    const mlService = await import("../services/mercadolibre.service.js");
-    const pool = (await import("../db.js")).default;
+    // 2. INSERT inicial — garantiza trazabilidad ante cualquier fallo
+    const insertResult = await pool.query(
+      `INSERT INTO publicaciones_masivas (price, status, created_at) 
+       VALUES ($1, 'procesando', NOW()) RETURNING id`,
+      [price]
+    );
+    publicacionId = insertResult.rows[0].id;
+    console.log(`[publish/create] Registro inicial creado: id=${publicacionId}`);
 
-    // 2. Analizar imagen con Vision
+    // 3. Analizar imagen con Vision
     console.log("[publish/create] Iniciando análisis con Vision...");
     const visionResult = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
     console.log(`[publish/create] Vision detectó: "${visionResult.title}" (${visionResult.condition_detected}, ${visionResult.confidence}%)`);
 
-    // 3. Publicar en ML — SIEMPRE como "new" por limitación de la API
+    // 4. Publicar en ML — SIEMPRE como "new" por limitación de la API
     const mlResponse = await mlService.publishProductFromJSON({
       title: visionResult.title,
       price,
       stock,
       condition: "new",
       description: visionResult.description,
-      pictures: [], // por ahora no subimos la foto al ML, usa las del catálogo
+      pictures: [],
     });
 
-    // 4. Determinar flags de revisión
+    // 5. Flags de revisión
     const visionDetectedNotNew = visionResult.condition_detected !== "new";
+    const lowConfidence = visionResult.confidence < 70;
 
-    // Caso A: no se encontró match de catálogo -> pendiente manual
+    // Caso A: no se encontró match de catálogo
     if (mlResponse.requiere_revision_manual) {
       await pool.query(
-        `INSERT INTO publicaciones_masivas 
-         (titulo, status, condition, price, requiere_revision, motivo_revision, confianza_condicion)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `UPDATE publicaciones_masivas SET 
+          titulo = $1, status = $2, condition = $3, 
+          requiere_revision = $4, motivo_revision = $5, 
+          confianza_condicion = $6, vision_result = $7
+         WHERE id = $8`,
         [
           visionResult.title,
           "pendiente_manual",
           "new",
-          price,
           true,
           `Sin match de catálogo. Vision detectó: ${visionResult.condition_detected}`,
           visionResult.confidence,
+          visionResult,
+          publicacionId,
         ]
       );
 
       return res.json({
         status: "pendiente_manual",
+        id: publicacionId,
         motivo: mlResponse.mensaje,
         vision_result: visionResult,
       });
     }
 
     // Caso B: publicado OK
-    const motivoRevision = visionDetectedNotNew
-      ? `Vision detectó "${visionResult.condition_detected}", cambiar en ML web`
-      : null;
+    const motivosRevision = [];
+    if (visionDetectedNotNew) {
+      motivosRevision.push(`Vision detectó "${visionResult.condition_detected}"`);
+    }
+    if (lowConfidence) {
+      motivosRevision.push(`Confianza baja (${visionResult.confidence}%)`);
+    }
+
+    const requiereRevision = motivosRevision.length > 0;
+    const motivoRevision = requiereRevision ? motivosRevision.join(" | ") : null;
 
     await pool.query(
-      `INSERT INTO publicaciones_masivas 
-       (titulo, ml_id, status, permalink, condition, price, requiere_revision, motivo_revision, confianza_condicion)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `UPDATE publicaciones_masivas SET 
+        titulo = $1, ml_id = $2, status = $3, permalink = $4, 
+        condition = $5, requiere_revision = $6, motivo_revision = $7, 
+        confianza_condicion = $8, vision_result = $9
+       WHERE id = $10`,
       [
         visionResult.title,
         mlResponse.id,
         "ok",
         mlResponse.permalink,
         "new",
-        price,
-        visionDetectedNotNew,
+        requiereRevision,
         motivoRevision,
         visionResult.confidence,
+        visionResult,
+        publicacionId,
       ]
     );
 
     return res.json({
       status: "publicado",
+      id: publicacionId,
       ml_id: mlResponse.id,
       permalink: mlResponse.permalink,
-      requiere_revision: visionDetectedNotNew,
+      requiere_revision: requiereRevision,
       motivo_revision: motivoRevision,
       catalog_match: mlResponse.catalog_match_name || null,
       vision_result: visionResult,
     });
   } catch (error) {
     console.error("[publish/create] Error:", error.message);
-    return res.status(500).json({ error: error.message });
+
+    // Si ya habíamos creado el registro, lo marcamos como error
+    if (publicacionId) {
+      try {
+        await pool.query(
+          `UPDATE publicaciones_masivas SET status = 'error', error_msg = $1 WHERE id = $2`,
+          [error.message, publicacionId]
+        );
+      } catch (dbError) {
+        console.error("[publish/create] Error al marcar fallo en DB:", dbError.message);
+      }
+    }
+
+    return res.status(500).json({ 
+      error: error.message, 
+      id: publicacionId 
+    });
   }
 });
 
