@@ -442,7 +442,7 @@ export const publishProductAsFreeListing = async (
   // 3. Mapear atributos de Vision al formato ML
   const visionAttrs = visionResult.attributes || {};
 
- const attributes = [
+  const attributes = [
     {
       id: "BRAND",
       value_name: visionAttrs.brand || "Sin marca",
@@ -461,7 +461,6 @@ export const publishProductAsFreeListing = async (
     },
   ];
 
-  // family_name va como campo TOP-LEVEL del item, no dentro de attributes
   const familyName =
     visionAttrs.character ||
     visionAttrs.collection ||
@@ -470,7 +469,7 @@ export const publishProductAsFreeListing = async (
   // 4. Construir payload
   const item = {
     title: productData.title.substring(0, 60),
-    family_name: familyName,   // ← campo top-level requerido por ML
+    family_name: familyName,
     category_id: categoryId,
     price: productData.price,
     currency_id: "ARS",
@@ -485,7 +484,7 @@ export const publishProductAsFreeListing = async (
     attributes: attributes,
   };
 
-  console.log("[publishAsFreeListing] Enviando POST /items...");
+  console.log("[publishAsFreeListing] PAYLOAD enviado a ML:", JSON.stringify(item, null, 2));
 
   // 5. POST a ML
   const response = await fetch(`${ML_BASE}/items`, {
@@ -500,6 +499,27 @@ export const publishProductAsFreeListing = async (
   const data = await response.json();
 
   if (!response.ok || data.error) {
+    // DEBUG: consultar atributos obligatorios de la categoría que ML devolvió
+    console.error(`[publishAsFreeListing] ❌ ML rechazó. Consultando atributos obligatorios de ${categoryId}...`);
+    try {
+      const attrsResp = await fetch(
+        `${ML_BASE}/categories/${categoryId}/attributes`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const attrsData = await attrsResp.json();
+      const requiredAttrs = Array.isArray(attrsData)
+        ? attrsData.filter(a => a.tags?.required || a.tags?.catalog_required || a.tags?.conditional_required)
+        : [];
+      console.error(`[publishAsFreeListing] Atributos obligatorios de ${categoryId}:`);
+      requiredAttrs.forEach(a => {
+        console.error(`  - ${a.id} (${a.name}) — tags: ${JSON.stringify(a.tags)}`);
+      });
+    } catch (attrErr) {
+      console.error("[publishAsFreeListing] No pude consultar attrs de la categoría:", attrErr.message);
+    }
+
+    console.error(`[publishAsFreeListing] Respuesta completa de ML:`, JSON.stringify(data, null, 2));
+
     throw new Error(
       `ML rechazó publicación libre: ${data.message || data.error} — ${JSON.stringify(data.cause || data)}`
     );
@@ -513,7 +533,6 @@ export const publishProductAsFreeListing = async (
     category_id: categoryId,
   };
 };
-
 export const getTokens = () => tokens;
 export const setTokens = (newTokens) => { tokens = newTokens; };
 export const getListingTypes = async (categoryId) => {
