@@ -306,7 +306,6 @@ const calcularSimilitud = (str1, str2) => {
   }
 
 
-// 3. Traer info del catálogo para obtener category_id
  // 3. Traer info del catálogo para obtener category_id
 // Obtener category_id del catálogo (necesario para el POST)
   let categoryIdFromCatalog = null;
@@ -375,6 +374,106 @@ const calcularSimilitud = (str1, str2) => {
   return {
     ...data,
     catalog_match_name: catalogMatch.name,
+  };
+};
+
+/**
+ * Publica un producto en MercadoLibre como publicación LIBRE (sin catálogo).
+ * Se usa como fallback cuando no hay match de catálogo.
+ * 
+ * Sube la foto del usuario a ML y arma el payload con atributos inferidos por Vision.
+ * 
+ * @param {Object} productData - { title, price, stock, condition, description }
+ * @param {Buffer} imageBuffer - Buffer de la imagen del usuario
+ * @param {string} mimeType - MIME type de la imagen
+ * @param {Object} visionResult - Resultado completo de Claude Vision (para atributos)
+ * @returns {Promise<Object>} item publicado con ml_id, permalink, etc.
+ */
+export const publishProductAsFreeListing = async (
+  productData,
+  imageBuffer,
+  mimeType,
+  visionResult
+) => {
+  const token = await getValidToken();
+
+  // 1. Obtener category_id con domain_discovery
+  console.log("[publishAsFreeListing] Obteniendo category_id...");
+  const discoveryResp = await fetch(
+    `${ML_BASE}/sites/MLA/domain_discovery/search?limit=1&q=${encodeURIComponent(productData.title)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const discoveryData = await discoveryResp.json();
+
+  if (!Array.isArray(discoveryData) || discoveryData.length === 0) {
+    throw new Error("domain_discovery no devolvió categoría para este título");
+  }
+
+  const categoryId = discoveryData[0].category_id;
+  console.log(`[publishAsFreeListing] category_id=${categoryId} (domain=${discoveryData[0].domain_id})`);
+
+  // 2. Subir la foto a ML
+  console.log("[publishAsFreeListing] Subiendo foto a ML...");
+  const pictureId = await uploadPictureToML(imageBuffer, mimeType);
+
+  // 3. Mapear atributos de Vision al formato ML
+  // Empezamos con los básicos. Si ML rechaza por otros, los agregamos después.
+  const visionAttrs = visionResult.attributes || {};
+
+  const attributes = [
+    {
+      id: "BRAND",
+      value_name: visionAttrs.brand || "Sin marca",
+    },
+    {
+      id: "MODEL",
+      value_name: visionAttrs.alphanumeric_model || "Genérico",
+    },
+  ];
+
+  // 4. Construir payload
+  const item = {
+    title: productData.title.substring(0, 60), // ML exige máx 60 chars
+    category_id: categoryId,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new", // workaround: siempre new
+    description: {
+      plain_text: productData.description || productData.title,
+    },
+    pictures: [{ id: pictureId }],
+    attributes: attributes,
+  };
+
+  console.log("[publishAsFreeListing] Enviando POST /items...");
+
+  // 5. POST a ML
+  const response = await fetch(`${ML_BASE}/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(item),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    throw new Error(
+      `ML rechazó publicación libre: ${data.message || data.error} — ${JSON.stringify(data.cause || data)}`
+    );
+  }
+
+  console.log(`[publishAsFreeListing] ✅ Publicado: ${data.id}`);
+
+  return {
+    ...data,
+    publication_type: "free_listing",
+    category_id: categoryId,
   };
 };
 export const getTokens = () => tokens;

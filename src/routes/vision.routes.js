@@ -186,32 +186,93 @@ router.post("/create", upload.single("image"), async (req, res) => {
     const visionDetectedNotNew = visionResult.condition_detected !== "new";
     const lowConfidence = visionResult.confidence < 70;
 
-    // Caso A: no se encontró match de catálogo
+    // Caso A: no se encontró match de catálogo → intentar fallback libre
     if (mlResponse.requiere_revision_manual) {
-      await pool.query(
-        `UPDATE publicaciones_masivas SET 
-          titulo = $1, status = $2, condition = $3, 
-          requiere_revision = $4, motivo_revision = $5, 
-          confianza_condicion = $6, vision_result = $7
-         WHERE id = $8`,
-        [
-          visionResult.title,
-          "pendiente_manual",
-          "new",
-          true,
-          `Sin match de catálogo. Vision detectó: ${visionResult.condition_detected}`,
-          visionResult.confidence,
-          visionResult,
-          publicacionId,
-        ]
-      );
+      console.log("[publish/create] Sin catálogo. Intentando fallback libre...");
 
-      return res.json({
-        status: "pendiente_manual",
-        id: publicacionId,
-        motivo: mlResponse.mensaje,
-        vision_result: visionResult,
-      });
+      try {
+        const freeListingResponse = await mlService.publishProductAsFreeListing(
+          {
+            title: visionResult.title,
+            price,
+            stock,
+            condition: "new",
+            description: visionResult.description,
+          },
+          req.file.buffer,
+          req.file.mimetype,
+          visionResult
+        );
+
+        // Fallback libre exitoso → publicado con requiere_revision=true
+        const motivoFallback = 
+          `Publicación libre (sin catálogo ML). Vision confidence: ${visionResult.confidence}%. ` +
+          `Revisar atributos en ML web.`;
+
+        await pool.query(
+          `UPDATE publicaciones_masivas SET 
+            titulo = $1, ml_id = $2, status = $3, permalink = $4, 
+            condition = $5, requiere_revision = $6, motivo_revision = $7, 
+            confianza_condicion = $8, vision_result = $9
+           WHERE id = $10`,
+          [
+            visionResult.title,
+            freeListingResponse.id,
+            "ok",
+            freeListingResponse.permalink,
+            "new",
+            true,
+            motivoFallback,
+            visionResult.confidence,
+            visionResult,
+            publicacionId,
+          ]
+        );
+
+        console.log(`[publish/create] ✅ Publicado vía fallback libre: ${freeListingResponse.id}`);
+
+        return res.json({
+          status: "publicado",
+          id: publicacionId,
+          ml_id: freeListingResponse.id,
+          permalink: freeListingResponse.permalink,
+          requiere_revision: true,
+          motivo_revision: motivoFallback,
+          publication_type: "free_listing",
+          vision_result: visionResult,
+        });
+      } catch (fallbackError) {
+        // Fallback libre también falló → queda pendiente_manual
+        console.error("[publish/create] Fallback libre falló:", fallbackError.message);
+
+        const motivoCompleto = 
+          `Sin match catálogo + fallback libre falló: ${fallbackError.message}`;
+
+        await pool.query(
+          `UPDATE publicaciones_masivas SET 
+            titulo = $1, status = $2, condition = $3, 
+            requiere_revision = $4, motivo_revision = $5, 
+            confianza_condicion = $6, vision_result = $7
+           WHERE id = $8`,
+          [
+            visionResult.title,
+            "pendiente_manual",
+            "new",
+            true,
+            motivoCompleto,
+            visionResult.confidence,
+            visionResult,
+            publicacionId,
+          ]
+        );
+
+        return res.json({
+          status: "pendiente_manual",
+          id: publicacionId,
+          motivo: motivoCompleto,
+          vision_result: visionResult,
+        });
+      }
     }
 
     // Caso B: publicado OK
