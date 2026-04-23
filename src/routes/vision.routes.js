@@ -278,4 +278,32 @@ router.post("/create", upload.single("image"), async (req, res) => {
   }
 });
 
+// ===== ENDPOINT TEMPORAL DE TEST — borrar después de validar =====
+router.post("/test-upload", upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No se recibió imagen" });
+    }
+
+    const mlService = await import("../services/mercadolibre.service.js");
+    
+    console.log("[test-upload] Subiendo imagen a ML...");
+    const pictureId = await mlService.uploadPictureToML(
+      req.file.buffer,
+      req.file.mimetype
+    );
+    console.log(`[test-upload] picture_id recibido: ${pictureId}`);
+
+    return res.json({
+      success: true,
+      picture_id: pictureId,
+      mime_type: req.file.mimetype,
+      size_bytes: req.file.size,
+    });
+  } catch (error) {
+    console.error("[test-upload] Error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
