@@ -442,32 +442,32 @@ export const publishProductAsFreeListing = async (
   // 3. Vision attributes
   const visionAttrs = visionResult?.attributes || {};
 
-  const attributes = [
-    {
-      id: "MANUFACTURER",
-      value_name: visionAttrs.brand || "Genérico",
-    },
-    {
-      id: "MODEL",
-      value_name: visionAttrs.alphanumeric_model || "Genérico",
-    },
-    {
-      id: "MATERIAL",
-      value_name: visionAttrs.material || "PVC",
-    },
-    {
-      id: "EMPTY_GTIN_REASON",
-      value_id: "12342907",
-    },
-    {
-      id: "VALUE_ADDED_TAX",
-      value_id: "48405909",
-    },
-    {
-      id: "IMPORT_DUTY",
-      value_id: "12342907",
-    },
-  ];
+ const attributes = [
+  {
+    id: "MANUFACTURER",
+    value_name: visionAttrs.brand || "Genérico",
+  },
+  {
+    id: "MODEL",
+    value_name: visionAttrs.alphanumeric_model || "Genérico",
+  },
+  {
+    id: "MATERIAL",
+    value_name: visionAttrs.material || "PVC",
+  },
+  {
+    id: "EMPTY_GTIN_REASON",
+    value_id: "12342907",
+  },
+  {
+    id: "VALUE_ADDED_TAX",
+    value_id: "48405909",
+  },
+  {
+    id: "IMPORT_DUTY",
+    value_id: "12342907",
+  }
+];
 
   // 4. Sanitizar título
   const titleParts = [productData.title];
