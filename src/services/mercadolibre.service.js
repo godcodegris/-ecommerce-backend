@@ -435,67 +435,61 @@ export const publishProductAsFreeListing = async (
   const categoryId = discoveryData[0].category_id;
   console.log(`[publishAsFreeListing] category_id=${categoryId} (domain=${discoveryData[0].domain_id})`);
 
-  // 2. Subir la foto a ML
+  // 2. Subir la foto
   console.log("[publishAsFreeListing] Subiendo foto a ML...");
   const pictureId = await uploadPictureToML(imageBuffer, mimeType);
 
-  // 3. Mapear atributos de Vision al formato ML
-  const visionAttrs = visionResult.attributes || {};
+  // 3. Vision attributes
+  const visionAttrs = visionResult?.attributes || {};
 
   const attributes = [
-   {
-      id: "BRAND",
-      value_name: 
-        visionAttrs.brand ||
-        visionAttrs.collection ||
-        visionAttrs.character ||
-        "Sin marca",
+    {
+      id: "MANUFACTURER",
+      value_name: visionAttrs.brand || "Genérico",
     },
     {
       id: "MODEL",
       value_name: visionAttrs.alphanumeric_model || "Genérico",
     },
     {
-      id: "COLLECTION",
-      value_name: visionAttrs.collection || visionAttrs.character || "Sin colección",
-    },
-    {
-      id: "VALUE_ADDED_TAX",
-      value_id: "48405909",  // IVA 21% Argentina
+      id: "MATERIAL",
+      value_name: visionAttrs.material || "PVC",
     },
     {
       id: "EMPTY_GTIN_REASON",
-      value_id: "12342907",  // "Not registered" — no tengo código de barras
+      value_id: "12342907",
+    },
+    {
+      id: "VALUE_ADDED_TAX",
+      value_id: "48405909",
     },
     {
       id: "IMPORT_DUTY",
-      value_id: "12342907",  // "Not applicable" — producto nacional
+      value_id: "12342907",
     },
   ];
 
-  const familyName =
-    visionAttrs.character ||
-    visionAttrs.collection ||
-    productData.title.substring(0, 60);
-
- // 4. Sanitizar título: agregar detalles para evitar matcheo con fichas de catálogo
+  // 4. Sanitizar título
   const titleParts = [productData.title];
-  if (visionResult.attributes?.approx_height_cm) {
-    titleParts.push(`${visionResult.attributes.approx_height_cm}cm`);
+
+  if (visionAttrs?.approx_height_cm) {
+    titleParts.push(`${visionAttrs.approx_height_cm}cm`);
   }
-  if (visionResult.attributes?.material) {
-    titleParts.push(visionResult.attributes.material);
+
+  if (visionAttrs?.material) {
+    titleParts.push(visionAttrs.material);
   }
-  if (visionResult.attributes?.package_condition === "loose") {
+
+  if (visionAttrs?.package_condition === "loose") {
     titleParts.push("Sin Caja");
   }
+
   const sanitizedTitle = titleParts.join(" ").substring(0, 60);
   console.log(`[publishAsFreeListing] Title sanitizado: "${sanitizedTitle}"`);
 
-  // 5. Construir payload
+  // 5. Payload final (SIN family_name)
   const item = {
     title: sanitizedTitle,
-    family_name: familyName,
     category_id: categoryId,
     price: productData.price,
     currency_id: "ARS",
@@ -512,7 +506,6 @@ export const publishProductAsFreeListing = async (
 
   console.log("[publishAsFreeListing] PAYLOAD enviado a ML:", JSON.stringify(item, null, 2));
 
-  // 5. POST a ML
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
     headers: {
@@ -525,23 +518,28 @@ export const publishProductAsFreeListing = async (
   const data = await response.json();
 
   if (!response.ok || data.error) {
-    // DEBUG: consultar atributos obligatorios de la categoría que ML devolvió
     console.error(`[publishAsFreeListing] ❌ ML rechazó. Consultando atributos obligatorios de ${categoryId}...`);
+
     try {
       const attrsResp = await fetch(
         `${ML_BASE}/categories/${categoryId}/attributes`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       const attrsData = await attrsResp.json();
+
       const requiredAttrs = Array.isArray(attrsData)
         ? attrsData.filter(a => a.tags?.required || a.tags?.catalog_required || a.tags?.conditional_required)
         : [];
+
       console.error(`[publishAsFreeListing] Atributos obligatorios de ${categoryId}:`);
+
       requiredAttrs.forEach(a => {
         console.error(`  - ${a.id} (${a.name}) — tags: ${JSON.stringify(a.tags)}`);
       });
+
     } catch (attrErr) {
-      console.error("[publishAsFreeListing] No pude consultar attrs de la categoría:", attrErr.message);
+      console.error("[publishAsFreeListing] No pude consultar attrs:", attrErr.message);
     }
 
     console.error(`[publishAsFreeListing] Respuesta completa de ML:`, JSON.stringify(data, null, 2));
