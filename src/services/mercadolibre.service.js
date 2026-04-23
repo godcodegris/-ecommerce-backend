@@ -274,37 +274,60 @@ const calcularSimilitud = (str1, str2) => {
   const coincidencias = words1.filter(word => s2.includes(word)).length;
   return coincidencias / words1.length;
 };
- export const publishProductFromJSON = async (productData) => {
+export const publishProductFromJSON = async (productData, visionResult = null) => {
   const token = await getValidToken();
-  const UMBRAL_SIMILITUD = 0.6;
+  
+  // Reglas estrictas para aceptar match de catálogo (evita publicar productos como si fueran otros)
+  const UMBRAL_SIMILITUD = 0.75;        // antes 0.6 — más exigente
+  const MIN_VISION_CONFIDENCE = 80;     // Vision debe estar bastante seguro
+  const REQUIERE_BRAND_O_MODEL = true;  // producto debe tener marca o número identificable
 
   // 1. Buscar en catálogo
   let catalogMatch = null;
+  let similitud = 0;
+  let rechazoMotivo = null;
+
   try {
     const searchResult = await searchCatalogProduct(productData.title);
     if (searchResult && searchResult.all_results.length > 0) {
-      // Validar similitud contra el primer resultado
-      const similitud = calcularSimilitud(productData.title, searchResult.name);
+      similitud = calcularSimilitud(productData.title, searchResult.name);
       console.log(
         `[publishProductFromJSON] Búsqueda "${productData.title}" -> match "${searchResult.name}" (similitud: ${similitud.toFixed(2)})`
       );
-      if (similitud >= UMBRAL_SIMILITUD) {
+
+      // Aplicar reglas estrictas
+      const cumpleSimilitud = similitud >= UMBRAL_SIMILITUD;
+      const cumpleConfidence = !visionResult || visionResult.confidence >= MIN_VISION_CONFIDENCE;
+      const tieneIdentificador = !visionResult || !REQUIERE_BRAND_O_MODEL ||
+        (visionResult.attributes?.brand || visionResult.attributes?.alphanumeric_model);
+
+      if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
         catalogMatch = searchResult;
+        console.log(`[publishProductFromJSON] ✅ Match de catálogo aceptado`);
+      } else {
+        // Armar motivo de rechazo para debug/logging
+        const razones = [];
+        if (!cumpleSimilitud) razones.push(`similitud ${similitud.toFixed(2)} < ${UMBRAL_SIMILITUD}`);
+        if (!cumpleConfidence) razones.push(`vision confidence ${visionResult.confidence} < ${MIN_VISION_CONFIDENCE}`);
+        if (!tieneIdentificador) razones.push(`sin brand ni alphanumeric_model`);
+        rechazoMotivo = razones.join(" | ");
+        console.log(`[publishProductFromJSON] ❌ Match rechazado: ${rechazoMotivo}`);
       }
     }
   } catch (err) {
     console.warn("[publishProductFromJSON] Search de catálogo falló:", err.message);
   }
 
-  // 2. Si no hay match de catálogo -> pendiente de revisión manual
+  // 2. Si no hay match de catálogo (o fue rechazado) -> pendiente / fallback libre
   if (!catalogMatch) {
     return {
       requiere_revision_manual: true,
       motivo: "sin_match_catalogo",
-      mensaje: `No se encontró match de catálogo para "${productData.title}" con similitud >= ${UMBRAL_SIMILITUD}`,
+      mensaje: rechazoMotivo
+        ? `Match de catálogo rechazado: ${rechazoMotivo}`
+        : `No se encontró match de catálogo para "${productData.title}"`,
     };
   }
-
 
  // 3. Traer info del catálogo para obtener category_id
 // Obtener category_id del catálogo (necesario para el POST)

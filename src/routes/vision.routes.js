@@ -173,14 +173,14 @@ router.post("/create", upload.single("image"), async (req, res) => {
     console.log(`[publish/create] Vision detectó: "${visionResult.title}" (${visionResult.condition_detected}, ${visionResult.confidence}%)`);
 
     // 4. Publicar en ML — SIEMPRE como "new" por limitación de la API
-    const mlResponse = await mlService.publishProductFromJSON({
+ const mlResponse = await mlService.publishProductFromJSON({
       title: visionResult.title,
       price,
       stock,
       condition: "new",
       description: visionResult.description,
       pictures: [],
-    });
+    }, visionResult);
 
     // 5. Flags de revisión
     const visionDetectedNotNew = visionResult.condition_detected !== "new";
