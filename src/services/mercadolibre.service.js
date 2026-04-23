@@ -443,9 +443,13 @@ export const publishProductAsFreeListing = async (
   const visionAttrs = visionResult.attributes || {};
 
   const attributes = [
-    {
+   {
       id: "BRAND",
-      value_name: visionAttrs.brand || "Sin marca",
+      value_name: 
+        visionAttrs.brand ||
+        visionAttrs.collection ||
+        visionAttrs.character ||
+        "Sin marca",
     },
     {
       id: "MODEL",
