@@ -459,6 +459,14 @@ export const publishProductAsFreeListing = async (
       id: "VALUE_ADDED_TAX",
       value_id: "48405909",  // IVA 21% Argentina
     },
+    {
+      id: "EMPTY_GTIN_REASON",
+      value_id: "12342907",  // "Not registered" — no tengo código de barras
+    },
+    {
+      id: "IMPORT_DUTY",
+      value_id: "12342907",  // "Not applicable" — producto nacional
+    },
   ];
 
   const familyName =
