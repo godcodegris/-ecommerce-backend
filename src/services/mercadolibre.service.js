@@ -442,7 +442,7 @@ export const publishProductAsFreeListing = async (
   // 3. Mapear atributos de Vision al formato ML
   const visionAttrs = visionResult.attributes || {};
 
-  const attributes = [
+ const attributes = [
     {
       id: "BRAND",
       value_name: visionAttrs.brand || "Sin marca",
@@ -450,6 +450,14 @@ export const publishProductAsFreeListing = async (
     {
       id: "MODEL",
       value_name: visionAttrs.alphanumeric_model || "Genérico",
+    },
+    {
+      id: "COLLECTION",
+      value_name: visionAttrs.collection || visionAttrs.character || "Sin colección",
+    },
+    {
+      id: "VALUE_ADDED_TAX",
+      value_id: "48405909",  // IVA 21% Argentina
     },
   ];
 
