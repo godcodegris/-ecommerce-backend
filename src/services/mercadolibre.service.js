@@ -280,7 +280,7 @@ export const publishProductFromJSON = async (productData, visionResult = null) =
   // Reglas estrictas para aceptar match de catálogo (evita publicar productos como si fueran otros)
   const UMBRAL_SIMILITUD = 0.75;        // antes 0.6 — más exigente
   const MIN_VISION_CONFIDENCE = 80;     // Vision debe estar bastante seguro
-  const REQUIERE_BRAND_O_MODEL = true;  // producto debe tener marca o número identificable
+  const REQUIERE_BRAND_O_MODEL = false;  // producto debe tener marca o número identificable
 
   // 1. Buscar en catálogo
   let catalogMatch = null;
