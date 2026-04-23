@@ -478,9 +478,23 @@ export const publishProductAsFreeListing = async (
     visionAttrs.collection ||
     productData.title.substring(0, 60);
 
-  // 4. Construir payload
+ // 4. Sanitizar título: agregar detalles para evitar matcheo con fichas de catálogo
+  const titleParts = [productData.title];
+  if (visionResult.attributes?.approx_height_cm) {
+    titleParts.push(`${visionResult.attributes.approx_height_cm}cm`);
+  }
+  if (visionResult.attributes?.material) {
+    titleParts.push(visionResult.attributes.material);
+  }
+  if (visionResult.attributes?.package_condition === "loose") {
+    titleParts.push("Sin Caja");
+  }
+  const sanitizedTitle = titleParts.join(" ").substring(0, 60);
+  console.log(`[publishAsFreeListing] Title sanitizado: "${sanitizedTitle}"`);
+
+  // 5. Construir payload
   const item = {
-    title: productData.title.substring(0, 60),
+    title: sanitizedTitle,
     family_name: familyName,
     category_id: categoryId,
     price: productData.price,
