@@ -490,6 +490,7 @@ export const publishProductAsFreeListing = async (
   // 5. Payload final (SIN family_name)
   const item = {
     title: sanitizedTitle,
+    family_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
     category_id: categoryId,
     price: productData.price,
     currency_id: "ARS",
