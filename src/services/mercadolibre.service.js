@@ -440,7 +440,6 @@ export const publishProductAsFreeListing = async (
   const pictureId = await uploadPictureToML(imageBuffer, mimeType);
 
   // 3. Mapear atributos de Vision al formato ML
-  // Empezamos con los básicos. Si ML rechaza por otros, los agregamos después.
   const visionAttrs = visionResult.attributes || {};
 
   const attributes = [
@@ -452,22 +451,25 @@ export const publishProductAsFreeListing = async (
       id: "MODEL",
       value_name: visionAttrs.alphanumeric_model || "Genérico",
     },
-    {
-      id: "FAMILY_NAME",
-      value_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
-    },
   ];
+
+  // family_name va como campo TOP-LEVEL del item, no dentro de attributes
+  const familyName =
+    visionAttrs.character ||
+    visionAttrs.collection ||
+    productData.title.substring(0, 60);
 
   // 4. Construir payload
   const item = {
-    title: productData.title.substring(0, 60), // ML exige máx 60 chars
+    title: productData.title.substring(0, 60),
+    family_name: familyName,   // ← campo top-level requerido por ML
     category_id: categoryId,
     price: productData.price,
     currency_id: "ARS",
     available_quantity: productData.stock || 1,
     buying_mode: "buy_it_now",
     listing_type_id: "gold_pro",
-    condition: productData.condition || "new", // workaround: siempre new
+    condition: productData.condition || "new",
     description: {
       plain_text: productData.description || productData.title,
     },
@@ -503,6 +505,7 @@ export const publishProductAsFreeListing = async (
     category_id: categoryId,
   };
 };
+
 export const getTokens = () => tokens;
 export const setTokens = (newTokens) => { tokens = newTokens; };
 export const getListingTypes = async (categoryId) => {
