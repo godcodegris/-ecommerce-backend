@@ -395,6 +395,47 @@ export const getCatalogProductInfo = async (catalogProductId) => {
   return await response.json();
 };
 
+/**
+ * Sube una imagen a MercadoLibre y devuelve el picture_id
+ * que después se usa al crear una publicación libre.
+ * 
+ * @param {Buffer} imageBuffer - Buffer de la imagen
+ * @param {string} mimeType - MIME type (ej: "image/jpeg", "image/png")
+ * @returns {Promise<string>} picture_id generado por ML
+ */
+export const uploadPictureToML = async (imageBuffer, mimeType) => {
+  const token = await getValidToken();
+
+  // ML espera multipart/form-data con un campo "file"
+  const formData = new FormData();
+  const blob = new Blob([imageBuffer], { type: mimeType });
+  
+  // Nombre del archivo (ML lo requiere, aunque sea genérico)
+  const extension = mimeType.split("/")[1] || "jpg";
+  formData.append("file", blob, `upload.${extension}`);
+
+  const response = await fetch(`${ML_BASE}/pictures/items/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      // ⚠️ NO poner Content-Type manual — fetch lo setea automáticamente 
+      // con el boundary correcto cuando usás FormData
+    },
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.id) {
+    throw new Error(
+      `Upload de imagen a ML falló: ${data.message || JSON.stringify(data)}`
+    );
+  }
+
+  console.log(`[uploadPictureToML] Imagen subida: id=${data.id}`);
+  return data.id;
+};
+
 export const validateItem = async (itemData) => {
   const token = await getValidToken();
   const response = await fetch(`${ML_BASE}/items/validate`, {
