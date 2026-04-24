@@ -8,6 +8,7 @@ import {
   getUserProfile
 } from "./services/mercadolibre.service.js";
 import chatRouter from "./routes/chat.routes.js";
+import debugRouter from "./routes/debug.routes.js";
 import cron from "node-cron";
 
 import { fileURLToPath } from "url";
@@ -68,6 +69,8 @@ app.use("/mercadolibre", mlRouter);
 app.use("/auth", mlRouter);
 app.use("/chat", chatRouter);
 app.use("/api/publish", visionRouter);
+app.use("/api/debug", debugRouter);
+
 
 const PORT = process.env.PORT || 3000;
 
