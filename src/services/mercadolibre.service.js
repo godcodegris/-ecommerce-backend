@@ -437,7 +437,9 @@ export const publishProductAsFreeListing = async (
 
   // 2. Subir la foto
   console.log("[publishAsFreeListing] Subiendo foto a ML...");
-  const pictureId = await uploadPictureToML(imageBuffer, mimeType);
+  
+  const uploadResult = await uploadImageToML(imageBuffer, mimeType);
+  const pictureId = uploadResult.id;
 
   // 3. Vision attributes
   const visionAttrs = visionResult?.attributes || {};
