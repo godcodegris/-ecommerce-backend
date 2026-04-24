@@ -280,7 +280,7 @@ export const publishProductFromJSON = async (productData, visionResult = null) =
   // Reglas estrictas para aceptar match de catálogo (evita publicar productos como si fueran otros)
   const UMBRAL_SIMILITUD = 0.75;        // antes 0.6 — más exigente
   const MIN_VISION_CONFIDENCE = 80;     // Vision debe estar bastante seguro
-  const REQUIERE_BRAND_O_MODEL = false;  // producto debe tener marca o número identificable
+  const REQUIERE_BRAND_O_MODEL = true;  // producto debe tener marca o número identificable
 
   // 1. Buscar en catálogo
   let catalogMatch = null;
@@ -714,4 +714,37 @@ export const publicarMasivo = async (productos, descripcionDefault) => {
   }
 
   return resultados;
+};
+/**
+ * Sube una imagen a MercadoLibre y devuelve el picture_id.
+ * Se usa para el fallback de publicación libre.
+ */
+export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
+  const token = await getValidToken();
+  
+  const formData = new FormData();
+  const blob = new Blob([imageBuffer], { type: mimetype });
+  formData.append("file", blob, "image.jpg");
+
+  const response = await fetch("https://api.mercadolibre.com/pictures/items/upload", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error("[uploadImageToML] ❌ Error ML:", data);
+    throw new Error(`ML upload failed: ${JSON.stringify(data)}`);
+  }
+
+  console.log("[uploadImageToML] ✅ Imagen subida, picture_id:", data.id);
+
+  return {
+    id: data.id,
+    url: data.variations?.[0]?.url || null
+  };
 };

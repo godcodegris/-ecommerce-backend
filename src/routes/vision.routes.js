@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 
+
 const router = express.Router();
 
 const upload = multer({
@@ -171,6 +172,26 @@ router.post("/create", upload.single("image"), async (req, res) => {
     console.log("[publish/create] Iniciando análisis con Vision...");
     const visionResult = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
     console.log(`[publish/create] Vision detectó: "${visionResult.title}" (${visionResult.condition_detected}, ${visionResult.confidence}%)`);
+
+    router.post("/test-upload-image", upload.single("image"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Falta image" });
+    }
+
+    const mlService = await import("../services/mercadolibre.service.js");
+    const result = await mlService.uploadImageToML(req.file.buffer, req.file.mimetype);
+    
+    return res.json({
+      ok: true,
+      picture_id: result.id,
+      preview_url: result.url
+    });
+  } catch (err) {
+    console.error("[/test-upload-image] Error:", err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
     // 4. Publicar en ML — SIEMPRE como "new" por limitación de la API
  const mlResponse = await mlService.publishProductFromJSON({
