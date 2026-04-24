@@ -489,9 +489,10 @@ export const publishProductAsFreeListing = async (
   const sanitizedTitle = titleParts.join(" ").substring(0, 60);
   console.log(`[publishAsFreeListing] Title sanitizado: "${sanitizedTitle}"`);
 
-  // 5. Payload final (SIN family_name)
+// 5. Payload final — omitimos title intencionalmente
+  // En categorías catalog-first (MLA2662, etc.), ML rechaza title manual.
+  // La hipótesis: dejar que ML arme el título desde family_name + attributes.
   const item = {
-    title: sanitizedTitle,
     family_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
     category_id: categoryId,
     price: productData.price,
@@ -501,11 +502,13 @@ export const publishProductAsFreeListing = async (
     listing_type_id: "gold_pro",
     condition: productData.condition || "new",
     description: {
-      plain_text: productData.description || productData.title,
+      plain_text: productData.description || "Figura coleccionable",
     },
     pictures: [{ id: pictureId }],
     attributes: attributes,
   };
+
+  console.log("[publishAsFreeListing] PAYLOAD (sin title) enviado a ML:", JSON.stringify(item, null, 2));
 
   console.log("[publishAsFreeListing] PAYLOAD enviado a ML:", JSON.stringify(item, null, 2));
 
