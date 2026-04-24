@@ -138,6 +138,7 @@ router.post("/analyze", upload.single("image"), async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 // ===== Orquestador end-to-end: foto -> Vision -> publicar en ML + DB =====
 router.post("/create", upload.single("image"), async (req, res) => {
   let publicacionId = null;
@@ -173,28 +174,8 @@ router.post("/create", upload.single("image"), async (req, res) => {
     const visionResult = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
     console.log(`[publish/create] Vision detectó: "${visionResult.title}" (${visionResult.condition_detected}, ${visionResult.confidence}%)`);
 
-    router.post("/test-upload-image", upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Falta image" });
-    }
-
-    const mlService = await import("../services/mercadolibre.service.js");
-    const result = await mlService.uploadImageToML(req.file.buffer, req.file.mimetype);
-    
-    return res.json({
-      ok: true,
-      picture_id: result.id,
-      preview_url: result.url
-    });
-  } catch (err) {
-    console.error("[/test-upload-image] Error:", err);
-    return res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
     // 4. Publicar en ML — SIEMPRE como "new" por limitación de la API
- const mlResponse = await mlService.publishProductFromJSON({
+    const mlResponse = await mlService.publishProductFromJSON({
       title: visionResult.title,
       price,
       stock,
@@ -368,17 +349,18 @@ router.post("/test-upload", upload.single("image"), async (req, res) => {
     }
 
     const mlService = await import("../services/mercadolibre.service.js");
-    
+
     console.log("[test-upload] Subiendo imagen a ML...");
-    const pictureId = await mlService.uploadPictureToML(
+    const result = await mlService.uploadImageToML(
       req.file.buffer,
       req.file.mimetype
     );
-    console.log(`[test-upload] picture_id recibido: ${pictureId}`);
+    console.log(`[test-upload] picture_id recibido: ${result.id}`);
 
     return res.json({
       success: true,
-      picture_id: pictureId,
+      picture_id: result.id,
+      preview_url: result.url,
       mime_type: req.file.mimetype,
       size_bytes: req.file.size,
     });
