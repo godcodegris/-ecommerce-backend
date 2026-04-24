@@ -445,31 +445,48 @@ export const publishProductAsFreeListing = async (
   const visionAttrs = visionResult?.attributes || {};
 
  const attributes = [
-  {
-    id: "MANUFACTURER",
-    value_name: visionAttrs.brand || "Genérico",
-  },
-  {
-    id: "MODEL",
-    value_name: visionAttrs.alphanumeric_model || "Genérico",
-  },
-  {
-    id: "MATERIAL",
-    value_name: visionAttrs.material || "PVC",
-  },
-  {
-    id: "EMPTY_GTIN_REASON",
-    value_id: "12342907",
-  },
-  {
-    id: "VALUE_ADDED_TAX",
-    value_id: "48405909",
-  },
-  {
-    id: "IMPORT_DUTY",
-    value_id: "12342907",
-  }
-];
+    {
+      id: "MANUFACTURER",
+      value_name: visionAttrs.brand || "Genérico",
+    },
+    {
+      id: "MODEL",
+      value_name: visionAttrs.alphanumeric_model || "Genérico",
+    },
+    {
+      id: "MATERIAL",
+      value_name: visionAttrs.material || "PVC",
+    },
+    {
+      id: "EMPTY_GTIN_REASON",
+      value_name: "Producto sin código universal de producto",
+    },
+    {
+      id: "VALUE_ADDED_TAX",
+      value_name: "21%",
+    },
+    {
+      id: "IMPORT_DUTY",
+      value_name: "0%",
+    },
+    // Dimensiones de paquete — defaults conservadores para figuras coleccionables
+    {
+      id: "SELLER_PACKAGE_HEIGHT",
+      value_name: "15 cm",
+    },
+    {
+      id: "SELLER_PACKAGE_WIDTH",
+      value_name: "10 cm",
+    },
+    {
+      id: "SELLER_PACKAGE_LENGTH",
+      value_name: "15 cm",
+    },
+    {
+      id: "SELLER_PACKAGE_WEIGHT",
+      value_name: "200 g",
+    },
+  ];
 
   // 4. Sanitizar título
   const titleParts = [productData.title];
