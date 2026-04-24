@@ -63,5 +63,35 @@ router.get("/attrs/:categoryId", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+router.get("/discovery", async (req, res) => {
+  try {
+    const query = req.query.q;
+    if (!query) {
+      return res.status(400).json({ error: "Falta query param 'q'. Ej: ?q=Figura Astro Boy" });
+    }
+
+    const result = await pool.query(
+      `SELECT access_token FROM ml_tokens ORDER BY created_at DESC LIMIT 1`
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(500).json({ error: "No hay tokens en DB" });
+    }
+
+    const token = result.rows[0].access_token;
+
+    // Pedimos los top 5 matches, no solo 1, para ver alternativas
+    const resp = await fetch(
+      `https://api.mercadolibre.com/sites/MLA/domain_discovery/search?limit=5&q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await resp.json();
+
+    return res.json({ query, results: data });
+  } catch (err) {
+    console.error("[debug/discovery] Error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;
