@@ -374,27 +374,8 @@ router.post("/test-upload", upload.single("image"), async (req, res) => {
 router.get("/debug-attrs/:categoryId", async (req, res) => {
   try {
     const mlService = await import("../services/mercadolibre.service.js");
-    const token = await mlService.getValidToken();
-
-    const resp = await fetch(
-      `https://api.mercadolibre.com/categories/${req.params.categoryId}/attributes`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await resp.json();
-
-    // Filtrar solo los que nos interesan, con sus valores permitidos
-    const targets = ["BRAND", "MANUFACTURER", "COLLECTION", "EMPTY_GTIN_REASON", "VALUE_ADDED_TAX", "IMPORT_DUTY", "MATERIAL", "MODEL"];
-    const filtered = data
-      .filter(a => targets.includes(a.id))
-      .map(a => ({
-        id: a.id,
-        name: a.name,
-        tags: a.tags,
-        value_type: a.value_type,
-        values: a.values?.slice(0, 10) || null, // primeros 10 valores permitidos
-      }));
-
-    return res.json({ category: req.params.categoryId, attributes: filtered });
+    const result = await mlService.debugCategoryAttributes(req.params.categoryId);
+    return res.json(result);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
