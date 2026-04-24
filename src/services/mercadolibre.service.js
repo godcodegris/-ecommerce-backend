@@ -420,95 +420,105 @@ export const publishProductAsFreeListing = async (
 ) => {
   const token = await getValidToken();
 
-  // 1. Obtener category_id con domain_discovery
-  console.log("[publishAsFreeListing] Obteniendo category_id...");
+  // ========================================================================
+  // 1. DISCOVERY: pedir top 5 y elegir una categoría "buena"
+  // ========================================================================
+  console.log("[publishAsFreeListing] Buscando categoría...");
   const discoveryResp = await fetch(
-    `${ML_BASE}/sites/MLA/domain_discovery/search?limit=1&q=${encodeURIComponent(productData.title)}`,
+    `${ML_BASE}/sites/MLA/domain_discovery/search?limit=5&q=${encodeURIComponent(productData.title)}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   const discoveryData = await discoveryResp.json();
 
   if (!Array.isArray(discoveryData) || discoveryData.length === 0) {
-    throw new Error("domain_discovery no devolvió categoría para este título");
+    throw new Error("domain_discovery no devolvió categorías");
   }
 
-  const categoryId = discoveryData[0].category_id;
-  console.log(`[publishAsFreeListing] category_id=${categoryId} (domain=${discoveryData[0].domain_id})`);
-
-  // 2. Subir la foto
-  console.log("[publishAsFreeListing] Subiendo foto a ML...");
-  
-  const uploadResult = await uploadImageToML(imageBuffer, mimeType);
-  const pictureId = uploadResult.id;
-
-  // 3. Vision attributes
-  const visionAttrs = visionResult?.attributes || {};
-
- const attributes = [
-    {
-      id: "MANUFACTURER",
-      value_name: visionAttrs.brand || "Genérico",
-    },
-    {
-      id: "MODEL",
-      value_name: visionAttrs.alphanumeric_model || "Genérico",
-    },
-    {
-      id: "MATERIAL",
-      value_name: visionAttrs.material || "PVC",
-    },
-    {
-      id: "EMPTY_GTIN_REASON",
-      value_name: "Producto sin código universal de producto",
-    },
-    {
-      id: "VALUE_ADDED_TAX",
-      value_name: "21%",
-    },
-    {
-      id: "IMPORT_DUTY",
-      value_name: "0%",
-    },
-    // Dimensiones de paquete — defaults conservadores para figuras coleccionables
-    {
-      id: "SELLER_PACKAGE_HEIGHT",
-      value_name: "15 cm",
-    },
-    {
-      id: "SELLER_PACKAGE_WIDTH",
-      value_name: "10 cm",
-    },
-    {
-      id: "SELLER_PACKAGE_LENGTH",
-      value_name: "15 cm",
-    },
-    {
-      id: "SELLER_PACKAGE_WEIGHT",
-      value_name: "200 g",
-    },
+  // Dominios "buenos" para figuras/coleccionables (en orden de preferencia)
+  const PREFERRED_DOMAINS = [
+    "MLA-ACTION_FIGURES",
+    "MLA-COLLECTIBLE_FIGURES",
+    "MLA-DOLLS",
+    "MLA-DOLL_AND_ACTION_FIGURE_SETS",
   ];
 
-  // 4. Sanitizar título
-  const titleParts = [productData.title];
+  // Dominios a evitar para coleccionables
+  const BLOCKED_DOMAINS = [
+    "MLA-SCULPTURES_AND_STATUES",
+  ];
 
-  if (visionAttrs?.approx_height_cm) {
-    titleParts.push(`${visionAttrs.approx_height_cm}cm`);
+  // Buscar preferido en orden
+  let chosen = null;
+  for (const preferred of PREFERRED_DOMAINS) {
+    const match = discoveryData.find(d => d.domain_id === preferred);
+    if (match) {
+      chosen = match;
+      break;
+    }
   }
 
-  if (visionAttrs?.material) {
-    titleParts.push(visionAttrs.material);
+  // Si no hay preferido, tomar el primero que no esté bloqueado
+  if (!chosen) {
+    chosen = discoveryData.find(d => !BLOCKED_DOMAINS.includes(d.domain_id));
   }
 
-  if (visionAttrs?.package_condition === "loose") {
-    titleParts.push("Sin Caja");
+  // Último recurso: el top match (podría ser bloqueado, pero mejor eso que nada)
+  if (!chosen) {
+    chosen = discoveryData[0];
+    console.warn(`[publishAsFreeListing] ⚠️ Usando categoría bloqueada ${chosen.domain_id} como último recurso`);
   }
 
-  const sanitizedTitle = titleParts.join(" ").substring(0, 60);
-  console.log(`[publishAsFreeListing] Title sanitizado: "${sanitizedTitle}"`);
+  const categoryId = chosen.category_id;
+  console.log(`[publishAsFreeListing] ✅ Categoría elegida: ${categoryId} (${chosen.category_name}) — domain: ${chosen.domain_id}`);
 
-// 5. Payload final — omitimos title intencionalmente
-  // En categorías catalog-first (MLA2662, etc.), ML rechaza title manual.
-  // La hipótesis: dejar que ML arme el título desde family_name + attributes.
+  // ========================================================================
+  // 2. Subir la foto del usuario
+  // ========================================================================
+
+  console.log("[publishAsFreeListing] Subiendo foto...");
+  const pictureId = await uploadPictureToML(imageBuffer, mimeType);
+
+  // ========================================================================
+  // 3. Construir atributos combinando: pre-rellenados de discovery + Vision + defaults
+  // ========================================================================
+  const visionAttrs = visionResult?.attributes || {};
+  const preFilled = chosen.attributes || [];
+
+  // Empezamos con los atributos que ML nos pre-rellenó (tienen IDs válidos garantizados)
+  const attributesMap = new Map();
+  preFilled.forEach(a => {
+    attributesMap.set(a.id, { id: a.id, value_id: a.value_id, value_name: a.value_name });
+  });
+
+  // Helper para agregar si no existe ya
+  const addIfMissing = (attr) => {
+    if (!attributesMap.has(attr.id)) {
+      attributesMap.set(attr.id, attr);
+    }
+  };
+
+  // Completar con Vision donde ML no dio nada
+  if (visionAttrs.brand) addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
+  if (visionAttrs.alphanumeric_model) addIfMissing({ id: "MODEL", value_name: visionAttrs.alphanumeric_model });
+  if (visionAttrs.character) addIfMissing({ id: "CHARACTER", value_name: visionAttrs.character });
+  if (visionAttrs.collection) addIfMissing({ id: "COLLECTION", value_name: visionAttrs.collection });
+
+  // Obligatorios con value_id conocidos (de debug)
+  addIfMissing({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });  // "El producto no tiene código registrado"
+  addIfMissing({ id: "VALUE_ADDED_TAX", value_id: "48405909" });     // "21 %"
+  addIfMissing({ id: "IMPORT_DUTY", value_id: "49553239" });          // "0 %"
+
+  // Dimensiones de paquete (defaults para figura ~10cm)
+  addIfMissing({ id: "SELLER_PACKAGE_HEIGHT", value_name: "15 cm" });
+  addIfMissing({ id: "SELLER_PACKAGE_WIDTH", value_name: "10 cm" });
+  addIfMissing({ id: "SELLER_PACKAGE_LENGTH", value_name: "15 cm" });
+  addIfMissing({ id: "SELLER_PACKAGE_WEIGHT", value_name: "200 g" });
+
+  const attributes = Array.from(attributesMap.values());
+
+  // ========================================================================
+  // 4. Payload — omitimos title (ML lo arma desde family_name + attributes)
+  // ========================================================================
   const item = {
     family_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
     category_id: categoryId,
@@ -525,10 +535,11 @@ export const publishProductAsFreeListing = async (
     attributes: attributes,
   };
 
-  console.log("[publishAsFreeListing] PAYLOAD (sin title) enviado a ML:", JSON.stringify(item, null, 2));
+  console.log("[publishAsFreeListing] PAYLOAD enviado:", JSON.stringify(item, null, 2));
 
-  console.log("[publishAsFreeListing] PAYLOAD enviado a ML:", JSON.stringify(item, null, 2));
-
+  // ========================================================================
+  // 5. Publicar
+  // ========================================================================
   const response = await fetch(`${ML_BASE}/items`, {
     method: "POST",
     headers: {
@@ -548,19 +559,15 @@ export const publishProductAsFreeListing = async (
         `${ML_BASE}/categories/${categoryId}/attributes`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       const attrsData = await attrsResp.json();
-
       const requiredAttrs = Array.isArray(attrsData)
         ? attrsData.filter(a => a.tags?.required || a.tags?.catalog_required || a.tags?.conditional_required)
         : [];
 
       console.error(`[publishAsFreeListing] Atributos obligatorios de ${categoryId}:`);
-
       requiredAttrs.forEach(a => {
         console.error(`  - ${a.id} (${a.name}) — tags: ${JSON.stringify(a.tags)}`);
       });
-
     } catch (attrErr) {
       console.error("[publishAsFreeListing] No pude consultar attrs:", attrErr.message);
     }
