@@ -756,45 +756,6 @@ export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
     body: formData
   });
 
-  /**
- * DEBUG: devuelve los valores permitidos de atributos clave en una categoría.
- * Temporal, borrar después de validar.
- */
-export const debugCategoryAttributes = async (categoryId) => {
-  const token = await getValidToken();
-
-  const resp = await fetch(
-    `${ML_BASE}/categories/${categoryId}/attributes`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const data = await resp.json();
-
-  const targets = [
-    "BRAND",
-    "MANUFACTURER",
-    "COLLECTION",
-    "EMPTY_GTIN_REASON",
-    "VALUE_ADDED_TAX",
-    "IMPORT_DUTY",
-    "MATERIAL",
-    "MODEL",
-  ];
-
-  const filtered = Array.isArray(data)
-    ? data
-        .filter(a => targets.includes(a.id))
-        .map(a => ({
-          id: a.id,
-          name: a.name,
-          tags: a.tags,
-          value_type: a.value_type,
-          values: a.values?.slice(0, 15) || null,
-        }))
-    : [];
-
-  return { category: categoryId, attributes: filtered };
-};
-
   const data = await response.json();
 
   if (!response.ok) {
