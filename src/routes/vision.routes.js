@@ -460,4 +460,17 @@ if (DEBUG_ENDPOINTS_ENABLED) {
   console.log("[vision.routes] ⚠️  Debug endpoints habilitados (NODE_ENV != production)");
 }
 
+// ===== INSPECTOR DE ITEMS — disponible siempre, devuelve JSON completo autenticado =====
+router.get("/inspect-item/:mlId", async (req, res) => {
+  try {
+    const mlService = await import("../services/mercadolibre.service.js");
+    const data = await mlService.debugGetItem(req.params.mlId);
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;
+
 export default router;
