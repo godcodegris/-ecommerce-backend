@@ -411,7 +411,117 @@ export const publishProductFromJSON = async (productData, visionResult = null) =
  * @param {string} mimeType - MIME type de la imagen
  * @param {Object} visionResult - Resultado completo de Claude Vision (para atributos)
  * @returns {Promise<Object>} item publicado con ml_id, permalink, etc.
- */
+ * 
+ * */
+// ============================================================================
+// HELPER: armar descripción enriquecida
+// Bloque 1: descripción de Vision mejorada con Claude (tono conservado, mejor SEO)
+// Bloque 2: atributos técnicos en bullets
+// Bloque 3: disclaimer condicional (solo si vintage/usado)
+// ============================================================================
+const improveDescriptionWithClaude = async (rawDescription, visionAttrs) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.warn("[improveDescription] ANTHROPIC_API_KEY no configurada, devuelvo texto original");
+    return rawDescription;
+  }
+
+  const character = visionAttrs.character || "el producto";
+  const collection = visionAttrs.collection || "";
+  const brand = visionAttrs.brand || "";
+
+  const prompt = `Sos un copywriter especializado en publicaciones de coleccionables en MercadoLibre Argentina.
+
+Te paso una descripción generada por IA y necesito que la mejores:
+
+DESCRIPCIÓN ORIGINAL:
+"${rawDescription}"
+
+CONTEXTO:
+- Personaje: ${character}
+- Colección: ${collection}
+- Marca: ${brand}
+
+INSTRUCCIONES:
+- Conservá el tono informativo y el contenido factual
+- Mejorá redacción y fluidez
+- Agregá 1-2 palabras clave útiles para SEO en MercadoLibre (ej: "coleccionable", "original", "nostalgia", el nombre del personaje)
+- Máximo 4 oraciones, mínimo 2
+- Sin emojis, sin frases de marketing exagerado ("increíble", "imperdible")
+- Sin listas ni bullets, solo párrafo corrido
+- Devolvé SOLO el texto mejorado, sin comillas, sin "aquí tienes:", sin nada extra`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5-20250929",
+        max_tokens: 400,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    const data = await response.json();
+    if (data.type === "error") {
+      console.warn("[improveDescription] Claude error, uso original:", data.error?.message);
+      return rawDescription;
+    }
+    const improved = data.content?.[0]?.text?.trim() || rawDescription;
+    console.log("[improveDescription] ✅ Texto mejorado");
+    return improved;
+  } catch (err) {
+    console.warn("[improveDescription] Falló, uso original:", err.message);
+    return rawDescription;
+  }
+};
+
+const buildEnrichedDescription = async (productData, visionResult) => {
+  const visionAttrs = visionResult?.attributes || {};
+  const rawText = visionResult?.description || productData.description || "Producto coleccionable.";
+
+  // BLOQUE 1: descripción narrativa mejorada
+  const improvedText = await improveDescriptionWithClaude(rawText, visionAttrs);
+
+  // BLOQUE 2: atributos técnicos
+  const techLines = [];
+  if (visionAttrs.brand) techLines.push(`Marca: ${visionAttrs.brand}`);
+  if (visionAttrs.character) techLines.push(`Personaje: ${visionAttrs.character}`);
+  if (visionAttrs.collection) techLines.push(`Colección: ${visionAttrs.collection}`);
+  if (visionAttrs.line) techLines.push(`Línea: ${visionAttrs.line}`);
+  if (visionAttrs.alphanumeric_model) techLines.push(`Modelo: ${visionAttrs.alphanumeric_model}`);
+  if (visionAttrs.material) techLines.push(`Material: ${visionAttrs.material}`);
+  if (visionAttrs.approx_height_cm) techLines.push(`Altura aproximada: ${visionAttrs.approx_height_cm} cm`);
+  if (visionAttrs.year) techLines.push(`Año: ${visionAttrs.year}`);
+
+  const packageMap = {
+    sealed_box: "Caja sellada original",
+    open_box: "Con caja, abierta",
+    loose: "Sin caja (loose)",
+    no_package: "Sin empaque",
+  };
+  if (visionAttrs.package_condition && packageMap[visionAttrs.package_condition]) {
+    techLines.push(`Estado del empaque: ${packageMap[visionAttrs.package_condition]}`);
+  }
+
+  const techBlock = techLines.length > 0
+    ? "\n\n--- DETALLES ---\n" + techLines.join("\n")
+    : "";
+
+  // BLOQUE 3: disclaimer condicional (solo vintage / usado)
+  const detectedCondition = visionResult?.condition_detected;
+  const isVintageOrUsed = detectedCondition === "used" || detectedCondition === "damaged";
+
+  const disclaimer = isVintageOrUsed
+    ? "\n\n--- IMPORTANTE ---\nProducto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real del producto. Ante cualquier duda, consultá antes de comprar."
+    : "";
+
+  return improvedText + techBlock + disclaimer;
+};
 export const publishProductAsFreeListing = async (
   productData,
   imageBuffer,
@@ -519,6 +629,10 @@ export const publishProductAsFreeListing = async (
   // ========================================================================
   // 4. Payload — omitimos title (ML lo arma desde family_name + attributes)
   // ========================================================================
+// Armar descripción enriquecida (Vision mejorado + atributos + disclaimer)
+  console.log("[publishAsFreeListing] Generando descripción enriquecida...");
+  const enrichedDescription = await buildEnrichedDescription(productData, visionResult);
+
   const item = {
     family_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
     category_id: categoryId,
@@ -529,7 +643,7 @@ export const publishProductAsFreeListing = async (
     listing_type_id: "gold_pro",
     condition: productData.condition || "new",
     description: {
-      plain_text: productData.description || "Figura coleccionable",
+      plain_text: enrichedDescription,
     },
     pictures: [{ id: pictureId }],
     attributes: attributes,
