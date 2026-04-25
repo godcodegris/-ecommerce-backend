@@ -129,9 +129,14 @@ export const analyzeImageWithVision = async (imageBuffer, mimeType) => {
 // Endpoint HTTP (ahora es un wrapper simple sobre la función pura)
 router.post("/analyze", upload.single("image"), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No se recibió imagen (campo 'image' requerido)" });
+   // 1. Validar entrada
+    if (!req.files || req.files.length !== 3) {
+      return res.status(400).json({
+        error: `Se requieren exactamente 3 imágenes (campo 'images'). Recibidas: ${req.files?.length || 0}`,
+      });
     }
+    const images = req.files.map(f => ({ buffer: f.buffer, mimeType: f.mimetype }));
+    const primaryImage = images[0]; // la primera es la "hero" — solo esta va a Vision
     const result = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
     return res.json(result);
   } catch (error) {
@@ -141,7 +146,7 @@ router.post("/analyze", upload.single("image"), async (req, res) => {
 });
 
 // ===== Orquestador end-to-end: foto -> Vision -> publicar en ML + DB =====
-router.post("/create", upload.single("image"), async (req, res) => {
+router.post("/create", upload.array("images", 3), async (req, res) => {
   let publicacionId = null;
 
   // Imports dinámicos (mantengo tu patrón existente)
@@ -150,9 +155,14 @@ router.post("/create", upload.single("image"), async (req, res) => {
 
   try {
     // 1. Validar entrada
-    if (!req.file) {
-      return res.status(400).json({ error: "No se recibió imagen (campo 'image' requerido)" });
+  // 1. Validar entrada
+    if (!req.files || req.files.length !== 3) {
+      return res.status(400).json({
+        error: `Se requieren exactamente 3 imágenes (campo 'images'). Recibidas: ${req.files?.length || 0}`,
+      });
     }
+    const images = req.files.map(f => ({ buffer: f.buffer, mimeType: f.mimetype }));
+    const primaryImage = images[0]; // la primera es la "hero" — solo esta va a Vision
 
     const price = parseFloat(req.body.price);
     if (!price || price <= 0) {
@@ -172,7 +182,7 @@ router.post("/create", upload.single("image"), async (req, res) => {
 
     // 3. Analizar imagen con Vision
     console.log("[publish/create] Iniciando análisis con Vision...");
-    const visionResult = await analyzeImageWithVision(req.file.buffer, req.file.mimetype);
+    const visionResult = await analyzeImageWithVision(primaryImage.buffer, primaryImage.mimeType);
     console.log(`[publish/create] Vision detectó: "${visionResult.title}" (${visionResult.condition_detected}, ${visionResult.confidence}%)`);
 
     // 4. Publicar en ML — SIEMPRE como "new" por limitación de la API

@@ -533,10 +533,12 @@ const buildEnrichedDescription = async (productData, visionResult) => {
 };
 export const publishProductAsFreeListing = async (
   productData,
-  imageBuffer,
-  mimeType,
+  images,
   visionResult
 ) => {
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("publishProductAsFreeListing requiere al menos 1 imagen en `images`");
+  }
   const token = await getValidToken();
 
   // Identificador único corto para evitar agrupación de variantes en ML
@@ -594,12 +596,39 @@ export const publishProductAsFreeListing = async (
   const categoryId = chosen.category_id;
   console.log(`[publishAsFreeListing] ✅ Categoría elegida: ${categoryId} (${chosen.category_name}) — domain: ${chosen.domain_id}`);
 
+// ========================================================================
+  // 2. Subir las fotos del usuario (Promise.allSettled — tolera fallas parciales)
   // ========================================================================
-  // 2. Subir la foto del usuario
-  // ========================================================================
+  console.log(`[publishAsFreeListing] Subiendo ${images.length} foto(s)...`);
+  const uploadResults = await Promise.allSettled(
+    images.map(img => uploadPictureToML(img.buffer, img.mimeType))
+  );
 
-  console.log("[publishAsFreeListing] Subiendo foto...");
-  const pictureId = await uploadPictureToML(imageBuffer, mimeType);
+  const successfulIds = [];
+  const failedIndexes = [];
+  uploadResults.forEach((r, idx) => {
+    if (r.status === "fulfilled" && r.value) {
+      const id = typeof r.value === "object" ? r.value.id : r.value;
+      if (id) successfulIds.push(id);
+      else failedIndexes.push(idx);
+    } else {
+      failedIndexes.push(idx);
+      console.error(`[publishAsFreeListing] ❌ Foto ${idx + 1} falló:`, r.reason?.message || r.reason);
+    }
+  });
+
+  if (successfulIds.length === 0) {
+    throw new Error(`Todas las ${images.length} fotos fallaron al subirse a ML`);
+  }
+
+  if (failedIndexes.length > 0) {
+    console.warn(
+      `[publishAsFreeListing] ⚠️ ${failedIndexes.length}/${images.length} fotos fallaron. ` +
+      `Publicando con ${successfulIds.length} foto(s).`
+    );
+  } else {
+    console.log(`[publishAsFreeListing] ✅ ${successfulIds.length} fotos subidas correctamente`);
+  }
 
   // ========================================================================
   // 3. Construir atributos combinando: pre-rellenados de discovery + Vision + defaults
@@ -701,8 +730,8 @@ export const publishProductAsFreeListing = async (
     buying_mode: "buy_it_now",
     listing_type_id: "gold_pro",
     condition: productData.condition || "new",
-description: enrichedDescription,
-    pictures: [{ id: pictureId }],
+    description: enrichedDescription,
+    pictures: successfulIds.map(id => ({ id })),
     attributes: attributes,
   };
 
