@@ -632,6 +632,7 @@ export const publishProductAsFreeListing = async (
   };
 
   // Completar con Vision SOLO si Vision realmente detectó algo (no null)
+// Completar con Vision SOLO si Vision realmente detectó algo (no null)
   if (visionAttrs.brand) addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
   if (visionAttrs.alphanumeric_model) addIfMissing({ id: "MODEL", value_name: visionAttrs.alphanumeric_model });
   if (visionAttrs.alphanumeric_model) addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: visionAttrs.alphanumeric_model });
@@ -640,6 +641,13 @@ export const publishProductAsFreeListing = async (
   if (visionAttrs.line) addIfMissing({ id: "LINE", value_name: visionAttrs.line });
   if (visionAttrs.material) addIfMissing({ id: "MATERIAL", value_name: visionAttrs.material });
 
+  // Fallbacks finales para atributos que ML suele exigir como obligatorios.
+  // Si llegamos acá sin marca, mandamos "Sin marca" (más honesto que inventar).
+  // Si llegamos sin modelo, mandamos "N/A".
+  // Esto se ejecuta DESPUÉS de los Vision-detected, así que no pisa nada bueno.
+  addIfMissing({ id: "BRAND", value_name: "Sin marca" });
+  addIfMissing({ id: "MODEL", value_name: "N/A" });
+  addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: "N/A" });
   // Obligatorios con value_id conocidos (de debug)
   addIfMissing({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });  // "El producto no tiene código registrado"
   addIfMissing({ id: "VALUE_ADDED_TAX", value_id: "48405909" });     // "21 %"
