@@ -778,6 +778,12 @@ export const publishProductAsFreeListing = async (
     description: enrichedDescription,
     pictures: successfulIds.map(id => ({ id })),
     attributes: attributes,
+    shipping: {
+      mode: "me2",
+      local_pick_up: true,
+      free_shipping: false,
+      tags: ["self_service_in"],
+    },
   };
 
   console.log("[publishAsFreeListing] PAYLOAD enviado:", JSON.stringify(item, null, 2));
