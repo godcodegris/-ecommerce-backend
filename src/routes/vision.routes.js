@@ -11,6 +11,7 @@ const upload = multer({
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL = "claude-sonnet-4-5-20250929";
+const DEBUG_ENDPOINTS_ENABLED = process.env.NODE_ENV !== "production";
 
 const SYSTEM_PROMPT = `Sos un experto en coleccionables (Funkos, figuras, cards, cómics, vintage) que trabaja para Thundera Store, una tienda argentina.
 
@@ -341,98 +342,97 @@ router.post("/create", upload.single("image"), async (req, res) => {
   }
 });
 
-// ===== ENDPOINT TEMPORAL DE TEST — borrar después de validar =====
-router.post("/test-upload", upload.single("image"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No se recibió imagen" });
+// ===== ENDPOINTS DEBUG — solo disponibles fuera de producción =====
+if (DEBUG_ENDPOINTS_ENABLED) {
+  router.post("/test-upload", upload.single("image"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No se recibió imagen" });
+      }
+
+      const mlService = await import("../services/mercadolibre.service.js");
+
+      console.log("[test-upload] Subiendo imagen a ML...");
+      const result = await mlService.uploadImageToML(
+        req.file.buffer,
+        req.file.mimetype
+      );
+      console.log(`[test-upload] picture_id recibido: ${result.id}`);
+
+      return res.json({
+        success: true,
+        picture_id: result.id,
+        preview_url: result.url,
+        mime_type: req.file.mimetype,
+        size_bytes: req.file.size,
+      });
+    } catch (error) {
+      console.error("[test-upload] Error:", error.message);
+      return res.status(500).json({ error: error.message });
     }
+  });
 
-    const mlService = await import("../services/mercadolibre.service.js");
+  router.get("/debug-attrs/:categoryId", async (req, res) => {
+    try {
+      const mlService = await import("../services/mercadolibre.service.js");
+      const token = await mlService.getValidToken();
 
-    console.log("[test-upload] Subiendo imagen a ML...");
-    const result = await mlService.uploadImageToML(
-      req.file.buffer,
-      req.file.mimetype
-    );
-    console.log(`[test-upload] picture_id recibido: ${result.id}`);
+      const resp = await fetch(
+        `https://api.mercadolibre.com/categories/${req.params.categoryId}/attributes`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await resp.json();
 
-    return res.json({
-      success: true,
-      picture_id: result.id,
-      preview_url: result.url,
-      mime_type: req.file.mimetype,
-      size_bytes: req.file.size,
-    });
-  } catch (error) {
-    console.error("[test-upload] Error:", error.message);
-    return res.status(500).json({ error: error.message });
-  }
-});
+      const targets = ["BRAND", "MANUFACTURER", "COLLECTION", "EMPTY_GTIN_REASON", "VALUE_ADDED_TAX", "IMPORT_DUTY", "MATERIAL", "MODEL"];
+      const filtered = data
+        .filter(a => targets.includes(a.id))
+        .map(a => ({
+          id: a.id,
+          name: a.name,
+          tags: a.tags,
+          value_type: a.value_type,
+          values: a.values?.slice(0, 10) || null,
+        }));
 
-// ===== DEBUG: inspeccionar atributos de una categoría =====
-router.get("/debug-attrs/:categoryId", async (req, res) => {
-  try {
-    const mlService = await import("../services/mercadolibre.service.js");
-    const token = await mlService.getValidToken();
+      return res.json({ category: req.params.categoryId, attributes: filtered });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
-    const resp = await fetch(
-      `https://api.mercadolibre.com/categories/${req.params.categoryId}/attributes`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await resp.json();
+  router.get("/debug-item/:mlId", async (req, res) => {
+    try {
+      const mlService = await import("../services/mercadolibre.service.js");
+      const data = await mlService.debugGetItem(req.params.mlId);
 
-    // Filtrar solo los que nos interesan, con sus valores permitidos
-    const targets = ["BRAND", "MANUFACTURER", "COLLECTION", "EMPTY_GTIN_REASON", "VALUE_ADDED_TAX", "IMPORT_DUTY", "MATERIAL", "MODEL"];
-    const filtered = data
-      .filter(a => targets.includes(a.id))
-      .map(a => ({
-        id: a.id,
-        name: a.name,
-        tags: a.tags,
-        value_type: a.value_type,
-        values: a.values?.slice(0, 10) || null, // primeros 10 valores permitidos
-      }));
+      return res.json({
+        ml_id: data.id,
+        title: data.title,
+        family_name: data.family_name,
+        catalog_product_id: data.catalog_product_id,
+        catalog_listing: data.catalog_listing,
+        domain_id: data.domain_id,
+        category_id: data.category_id,
+        description_field: data.description,
+        attributes_count: data.attributes?.length,
+        pictures_count: data.pictures?.length,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
-    return res.json({ category: req.params.categoryId, attributes: filtered });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
+  router.get("/debug-description/:mlId", async (req, res) => {
+    try {
+      const mlService = await import("../services/mercadolibre.service.js");
+      const data = await mlService.debugGetDescription(req.params.mlId);
+      return res.json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
-// ===== DEBUG TEMPORAL: ver qué guardó ML de un item =====
-// ===== DEBUG TEMPORAL: ver qué guardó ML de un item =====
-router.get("/debug-item/:mlId", async (req, res) => {
-  try {
-    const mlService = await import("../services/mercadolibre.service.js");
-    const data = await mlService.debugGetItem(req.params.mlId);
-
-    return res.json({
-      ml_id: data.id,
-      title: data.title,
-      family_name: data.family_name,
-      catalog_product_id: data.catalog_product_id,
-      catalog_listing: data.catalog_listing,
-      domain_id: data.domain_id,
-      category_id: data.category_id,
-      description_field: data.description,
-      attributes_count: data.attributes?.length,
-      pictures_count: data.pictures?.length,
-    });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ===== DEBUG: ver la descripción específica de un item =====
-router.get("/debug-description/:mlId", async (req, res) => {
-  try {
-    const mlService = await import("../services/mercadolibre.service.js");
-    const data = await mlService.debugGetDescription(req.params.mlId);
-    return res.json(data);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
+  console.log("[vision.routes] ⚠️  Debug endpoints habilitados (NODE_ENV != production)");
+}
 
 export default router;
