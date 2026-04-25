@@ -595,15 +595,30 @@ export const publishProductAsFreeListing = async (
   // ========================================================================
   // 3. Construir atributos combinando: pre-rellenados de discovery + Vision + defaults
   // ========================================================================
-  const visionAttrs = visionResult?.attributes || {};
+ const visionAttrs = visionResult?.attributes || {};
   const preFilled = chosen.attributes || [];
 
-  // Empezamos con los atributos que ML nos pre-rellenó.
-  // IMPORTANTE: descartamos value_id intencionalmente — los value_id pegan
-  // la publicación al catálogo de ML, lo que causa agrupación de variantes.
-  // Solo enviamos value_name (texto suelto) para mantener publicaciones únicas.
+  // Lista de atributos "inseguros" que ML pre-rellena asumiendo el catalog de
+  // un producto premium, pero que pueden no coincidir con el producto físico real.
+  // Para estos: solo confiamos en lo que Vision detectó. Si Vision dice null, omitimos.
+  const UNSAFE_PREFILLED = new Set([
+    "BRAND",
+    "MANUFACTURER",
+    "LINE",
+    "MODEL",
+    "ALPHANUMERIC_MODEL",
+    "CHARACTER_VERSION",
+    "MATERIAL",
+  ]);
+
+  // Empezamos con los atributos que ML pre-rellenó, EXCLUYENDO los inseguros.
+  // Descartamos value_id (rompe agrupación a catálogo) y filtramos por categoría.
   const attributesMap = new Map();
   preFilled.forEach(a => {
+    if (UNSAFE_PREFILLED.has(a.id)) {
+      console.log(`[publishAsFreeListing] ⚠️ Descartando pre-rellenado inseguro: ${a.id}=${a.value_name}`);
+      return;
+    }
     if (a.value_name) {
       attributesMap.set(a.id, { id: a.id, value_name: a.value_name });
     }
@@ -616,11 +631,14 @@ export const publishProductAsFreeListing = async (
     }
   };
 
-  // Completar con Vision donde ML no dio nada
+  // Completar con Vision SOLO si Vision realmente detectó algo (no null)
   if (visionAttrs.brand) addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
   if (visionAttrs.alphanumeric_model) addIfMissing({ id: "MODEL", value_name: visionAttrs.alphanumeric_model });
+  if (visionAttrs.alphanumeric_model) addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: visionAttrs.alphanumeric_model });
   if (visionAttrs.character) addIfMissing({ id: "CHARACTER", value_name: visionAttrs.character });
   if (visionAttrs.collection) addIfMissing({ id: "COLLECTION", value_name: visionAttrs.collection });
+  if (visionAttrs.line) addIfMissing({ id: "LINE", value_name: visionAttrs.line });
+  if (visionAttrs.material) addIfMissing({ id: "MATERIAL", value_name: visionAttrs.material });
 
   // Obligatorios con value_id conocidos (de debug)
   addIfMissing({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });  // "El producto no tiene código registrado"
