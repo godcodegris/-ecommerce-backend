@@ -670,7 +670,16 @@ export const publishProductAsFreeListing = async (
   };
 
 // Completar con Vision SOLO si Vision realmente detectó algo (no null)
-  if (visionAttrs.brand) addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
+  // Completar con Vision SOLO si Vision realmente detectó algo (no null)
+  // Excepción: si el producto viene loose (sin caja), NO confiamos en la marca
+  // porque no podemos verificar autenticidad. Mandamos "Sin marca" para evitar
+  // que ML exija GTIN obligatorio (lo activan ciertas marcas conocidas).
+  const isLoose = visionAttrs.package_condition === "loose";
+  if (visionAttrs.brand && !isLoose) {
+    addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
+  } else if (isLoose && visionAttrs.brand) {
+    console.log(`[publishAsFreeListing] ℹ️ Producto loose, ignorando BRAND="${visionAttrs.brand}" detectado por Vision (evita exigencia de GTIN)`);
+  }
   if (visionAttrs.alphanumeric_model) addIfMissing({ id: "MODEL", value_name: visionAttrs.alphanumeric_model });
   if (visionAttrs.alphanumeric_model) addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: visionAttrs.alphanumeric_model });
   if (visionAttrs.character) addIfMissing({ id: "CHARACTER", value_name: visionAttrs.character });
