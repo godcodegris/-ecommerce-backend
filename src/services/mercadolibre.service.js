@@ -509,15 +509,15 @@ const buildEnrichedDescription = async (productData, visionResult) => {
   }
 
   const techBlock = techLines.length > 0
-    ? `<br><br><strong>━━━ DETALLES ━━━</strong><br>${techLines.join("<br>")}`
+    ? `<br><br><strong>--- DETALLES ---</strong><br>${techLines.join("<br>")}`
     : "";
 
   // BLOQUE 3: disclaimer condicional (solo vintage / usado)
   const detectedCondition = visionResult?.condition_detected;
   const isVintageOrUsed = detectedCondition === "used" || detectedCondition === "damaged";
 
-  const disclaimer = isVintageOrUsed
-    ? `<br><br><strong>━━━ IMPORTANTE ━━━</strong><br>Producto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real del producto. Ante cualquier duda, consultá antes de comprar.`
+ const disclaimer = isVintageOrUsed
+    ? `<br><br><strong>--- IMPORTANTE ---</strong><br>Producto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real del producto. Ante cualquier duda, consultá antes de comprar.`
     : "";
 
   const htmlContent = `<p>${improvedText}</p>${techBlock}${disclaimer}`;
@@ -758,9 +758,12 @@ description: enrichedDescription,
   // llamar al endpoint /items/{id}/description aparte para que la persista.
   // ========================================================================
   try {
-    const descBody = typeof enrichedDescription === "object"
-      ? enrichedDescription
-      : { plain_text: enrichedDescription };
+ // ML rechaza el campo html aquí. Solo aceptamos plain_text limpio.
+    const plainTextOnly = typeof enrichedDescription === "object"
+      ? enrichedDescription.plain_text
+      : enrichedDescription;
+
+    const descBody = { plain_text: plainTextOnly };
 
     const descResp = await fetch(`${ML_BASE}/items/${data.id}/description`, {
       method: "POST",
