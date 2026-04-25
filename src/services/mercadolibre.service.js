@@ -489,14 +489,14 @@ const buildEnrichedDescription = async (productData, visionResult) => {
 
   // BLOQUE 2: atributos técnicos
   const techLines = [];
-  if (visionAttrs.brand) techLines.push(`Marca: ${visionAttrs.brand}`);
-  if (visionAttrs.character) techLines.push(`Personaje: ${visionAttrs.character}`);
-  if (visionAttrs.collection) techLines.push(`Colección: ${visionAttrs.collection}`);
-  if (visionAttrs.line) techLines.push(`Línea: ${visionAttrs.line}`);
-  if (visionAttrs.alphanumeric_model) techLines.push(`Modelo: ${visionAttrs.alphanumeric_model}`);
-  if (visionAttrs.material) techLines.push(`Material: ${visionAttrs.material}`);
-  if (visionAttrs.approx_height_cm) techLines.push(`Altura aproximada: ${visionAttrs.approx_height_cm} cm`);
-  if (visionAttrs.year) techLines.push(`Año: ${visionAttrs.year}`);
+  if (visionAttrs.brand) techLines.push(`<strong>Marca:</strong> ${visionAttrs.brand}`);
+  if (visionAttrs.character) techLines.push(`<strong>Personaje:</strong> ${visionAttrs.character}`);
+  if (visionAttrs.collection) techLines.push(`<strong>Colección:</strong> ${visionAttrs.collection}`);
+  if (visionAttrs.line) techLines.push(`<strong>Línea:</strong> ${visionAttrs.line}`);
+  if (visionAttrs.alphanumeric_model) techLines.push(`<strong>Modelo:</strong> ${visionAttrs.alphanumeric_model}`);
+  if (visionAttrs.material) techLines.push(`<strong>Material:</strong> ${visionAttrs.material}`);
+  if (visionAttrs.approx_height_cm) techLines.push(`<strong>Altura aproximada:</strong> ${visionAttrs.approx_height_cm} cm`);
+  if (visionAttrs.year) techLines.push(`<strong>Año:</strong> ${visionAttrs.year}`);
 
   const packageMap = {
     sealed_box: "Caja sellada original",
@@ -505,11 +505,11 @@ const buildEnrichedDescription = async (productData, visionResult) => {
     no_package: "Sin empaque",
   };
   if (visionAttrs.package_condition && packageMap[visionAttrs.package_condition]) {
-    techLines.push(`Estado del empaque: ${packageMap[visionAttrs.package_condition]}`);
+    techLines.push(`<strong>Estado del empaque:</strong> ${packageMap[visionAttrs.package_condition]}`);
   }
 
   const techBlock = techLines.length > 0
-    ? "\n\n--- DETALLES ---\n" + techLines.join("\n")
+    ? `<br><br><strong>━━━ DETALLES ━━━</strong><br>${techLines.join("<br>")}`
     : "";
 
   // BLOQUE 3: disclaimer condicional (solo vintage / usado)
@@ -517,10 +517,19 @@ const buildEnrichedDescription = async (productData, visionResult) => {
   const isVintageOrUsed = detectedCondition === "used" || detectedCondition === "damaged";
 
   const disclaimer = isVintageOrUsed
-    ? "\n\n--- IMPORTANTE ---\nProducto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real del producto. Ante cualquier duda, consultá antes de comprar."
+    ? `<br><br><strong>━━━ IMPORTANTE ━━━</strong><br>Producto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real del producto. Ante cualquier duda, consultá antes de comprar.`
     : "";
 
-  return improvedText + techBlock + disclaimer;
+  const htmlContent = `<p>${improvedText}</p>${techBlock}${disclaimer}`;
+  const plainContent = htmlContent
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "");
+
+  return {
+    plain_text: plainContent,
+    html: htmlContent,
+  };
 };
 export const publishProductAsFreeListing = async (
   productData,
@@ -666,9 +675,9 @@ export const publishProductAsFreeListing = async (
   // ========================================================================
 // Armar descripción enriquecida (Vision mejorado + atributos + disclaimer)
   console.log("[publishAsFreeListing] Generando descripción enriquecida...");
-  const enrichedDescription = await buildEnrichedDescription(productData, visionResult);
+ const enrichedDescription = await buildEnrichedDescription(productData, visionResult);
 
-  // family_name único — combina personaje + datos distintivos + ID corto
+  // family _name único — combina personaje + datos distintivos + ID corto
   // El ID al final garantiza que ML no agrupe esta publicación con otras del mismo personaje.
   const baseFamily = visionAttrs.character || visionAttrs.collection || "Figura coleccionable";
   const distinctiveBits = [
@@ -692,9 +701,7 @@ export const publishProductAsFreeListing = async (
     buying_mode: "buy_it_now",
     listing_type_id: "gold_pro",
     condition: productData.condition || "new",
-    description: {
-      plain_text: enrichedDescription,
-    },
+description: enrichedDescription,
     pictures: [{ id: pictureId }],
     attributes: attributes,
   };
