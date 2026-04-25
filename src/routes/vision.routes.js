@@ -473,4 +473,3 @@ router.get("/inspect-item/:mlId", async (req, res) => {
 
 export default router;
 
-export default router;
