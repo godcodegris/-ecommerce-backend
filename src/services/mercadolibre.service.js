@@ -530,6 +530,10 @@ export const publishProductAsFreeListing = async (
 ) => {
   const token = await getValidToken();
 
+  // Identificador único corto para evitar agrupación de variantes en ML
+  // Toma los últimos 5 dígitos del timestamp → ej: "47321"
+  const uniqueId = Date.now().toString().slice(-5);
+
   // ========================================================================
   // 1. DISCOVERY: pedir top 5 y elegir una categoría "buena"
   // ========================================================================
@@ -594,10 +598,15 @@ export const publishProductAsFreeListing = async (
   const visionAttrs = visionResult?.attributes || {};
   const preFilled = chosen.attributes || [];
 
-  // Empezamos con los atributos que ML nos pre-rellenó (tienen IDs válidos garantizados)
+  // Empezamos con los atributos que ML nos pre-rellenó.
+  // IMPORTANTE: descartamos value_id intencionalmente — los value_id pegan
+  // la publicación al catálogo de ML, lo que causa agrupación de variantes.
+  // Solo enviamos value_name (texto suelto) para mantener publicaciones únicas.
   const attributesMap = new Map();
   preFilled.forEach(a => {
-    attributesMap.set(a.id, { id: a.id, value_id: a.value_id, value_name: a.value_name });
+    if (a.value_name) {
+      attributesMap.set(a.id, { id: a.id, value_name: a.value_name });
+    }
   });
 
   // Helper para agregar si no existe ya
@@ -633,8 +642,23 @@ export const publishProductAsFreeListing = async (
   console.log("[publishAsFreeListing] Generando descripción enriquecida...");
   const enrichedDescription = await buildEnrichedDescription(productData, visionResult);
 
+  // family_name único — combina personaje + datos distintivos + ID corto
+  // El ID al final garantiza que ML no agrupe esta publicación con otras del mismo personaje.
+  const baseFamily = visionAttrs.character || visionAttrs.collection || "Figura coleccionable";
+  const distinctiveBits = [
+    visionAttrs.alphanumeric_model,
+    visionAttrs.year,
+    visionAttrs.brand,
+  ].filter(Boolean).join(" ");
+
+  const familyName = distinctiveBits
+    ? `${baseFamily} ${distinctiveBits} #${uniqueId}`
+    : `${baseFamily} #${uniqueId}`;
+
+  console.log(`[publishAsFreeListing] family_name único: "${familyName}"`);
+
   const item = {
-    family_name: visionAttrs.character || visionAttrs.collection || "Figura coleccionable",
+    family_name: familyName,
     category_id: categoryId,
     price: productData.price,
     currency_id: "ARS",
