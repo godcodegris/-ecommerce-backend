@@ -400,4 +400,52 @@ router.get("/debug-attrs/:categoryId", async (req, res) => {
   }
 });
 
+// ===== DEBUG TEMPORAL: ver qué guardó ML de un item =====
+router.get("/debug-item/:mlId", async (req, res) => {
+  try {
+    const mlService = await import("../services/mercadolibre.service.js");
+    const token = await mlService.getValidToken();
+
+    const resp = await fetch(
+      `https://api.mercadolibre.com/items/${req.params.mlId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await resp.json();
+
+    // Devolvemos solo lo que nos importa para el diagnóstico
+    return res.json({
+      ml_id: data.id,
+      title: data.title,
+      family_name: data.family_name,
+      catalog_product_id: data.catalog_product_id,
+      catalog_listing: data.catalog_listing,
+      domain_id: data.domain_id,
+      category_id: data.category_id,
+      description_field: data.description, // ¿qué hay acá?
+      attributes_count: data.attributes?.length,
+      pictures_count: data.pictures?.length,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== DEBUG: ver la descripción específica de un item =====
+router.get("/debug-description/:mlId", async (req, res) => {
+  try {
+    const mlService = await import("../services/mercadolibre.service.js");
+    const token = await mlService.getValidToken();
+
+    // ML tiene un endpoint específico para descripciones
+    const resp = await fetch(
+      `https://api.mercadolibre.com/items/${req.params.mlId}/description`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await resp.json();
+    return res.json(data);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
