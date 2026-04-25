@@ -776,6 +776,25 @@ export const getCatalogProductInfo = async (catalogProductId) => {
   return await response.json();
 };
 
+// ============================================================================
+// DEBUG: inspeccionar lo que ML guardó de un item ya publicado
+// ============================================================================
+export const debugGetItem = async (mlId) => {
+  const token = await getValidToken();
+  const response = await fetch(`${ML_BASE}/items/${mlId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return await response.json();
+};
+
+export const debugGetDescription = async (mlId) => {
+  const token = await getValidToken();
+  const response = await fetch(`${ML_BASE}/items/${mlId}/description`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return await response.json();
+};
+
 /**
  * Sube una imagen a MercadoLibre y devuelve el picture_id
  * que después se usa al crear una publicación libre.

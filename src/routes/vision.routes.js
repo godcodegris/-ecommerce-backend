@@ -401,18 +401,12 @@ router.get("/debug-attrs/:categoryId", async (req, res) => {
 });
 
 // ===== DEBUG TEMPORAL: ver qué guardó ML de un item =====
+// ===== DEBUG TEMPORAL: ver qué guardó ML de un item =====
 router.get("/debug-item/:mlId", async (req, res) => {
   try {
     const mlService = await import("../services/mercadolibre.service.js");
-    const token = await mlService.getValidToken();
+    const data = await mlService.debugGetItem(req.params.mlId);
 
-    const resp = await fetch(
-      `https://api.mercadolibre.com/items/${req.params.mlId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await resp.json();
-
-    // Devolvemos solo lo que nos importa para el diagnóstico
     return res.json({
       ml_id: data.id,
       title: data.title,
@@ -421,7 +415,7 @@ router.get("/debug-item/:mlId", async (req, res) => {
       catalog_listing: data.catalog_listing,
       domain_id: data.domain_id,
       category_id: data.category_id,
-      description_field: data.description, // ¿qué hay acá?
+      description_field: data.description,
       attributes_count: data.attributes?.length,
       pictures_count: data.pictures?.length,
     });
@@ -434,14 +428,7 @@ router.get("/debug-item/:mlId", async (req, res) => {
 router.get("/debug-description/:mlId", async (req, res) => {
   try {
     const mlService = await import("../services/mercadolibre.service.js");
-    const token = await mlService.getValidToken();
-
-    // ML tiene un endpoint específico para descripciones
-    const resp = await fetch(
-      `https://api.mercadolibre.com/items/${req.params.mlId}/description`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    const data = await resp.json();
+    const data = await mlService.debugGetDescription(req.params.mlId);
     return res.json(data);
   } catch (err) {
     return res.status(500).json({ error: err.message });
