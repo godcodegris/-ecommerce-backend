@@ -750,7 +750,37 @@ description: enrichedDescription,
     );
   }
 
-  console.log(`[publishAsFreeListing] ✅ Publicado: ${data.id}`);
+ console.log(`[publishAsFreeListing] ✅ Publicado: ${data.id}`);
+
+  // ========================================================================
+  // 6. SEGUNDA LLAMADA: setear descripción en el endpoint específico de ML
+  // ML acepta description en el POST inicial pero NO la guarda. Hay que
+  // llamar al endpoint /items/{id}/description aparte para que la persista.
+  // ========================================================================
+  try {
+    const descBody = typeof enrichedDescription === "object"
+      ? enrichedDescription
+      : { plain_text: enrichedDescription };
+
+    const descResp = await fetch(`${ML_BASE}/items/${data.id}/description`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(descBody),
+    });
+
+    if (descResp.ok) {
+      console.log(`[publishAsFreeListing] ✅ Descripción seteada en ${data.id}`);
+    } else {
+      const descErr = await descResp.json();
+      console.error(`[publishAsFreeListing] ⚠️ Descripción falló:`, JSON.stringify(descErr));
+      // No lanzamos error — el item ya está publicado, solo le falta descripción.
+    }
+  } catch (descErr) {
+    console.error(`[publishAsFreeListing] ⚠️ Excepción seteando descripción:`, descErr.message);
+  }
 
   return {
     ...data,
