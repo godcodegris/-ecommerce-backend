@@ -676,7 +676,10 @@ export const publishProductAsFreeListing = async (
   if (visionAttrs.character) addIfMissing({ id: "CHARACTER", value_name: visionAttrs.character });
   if (visionAttrs.collection) addIfMissing({ id: "COLLECTION", value_name: visionAttrs.collection });
   if (visionAttrs.line) addIfMissing({ id: "LINE", value_name: visionAttrs.line });
-  if (visionAttrs.material) addIfMissing({ id: "MATERIAL", value_name: visionAttrs.material });
+  if (visionAttrs.material) {
+  addIfMissing({ id: "MATERIAL", value_name: visionAttrs.material });
+  addIfMissing({ id: "MATERIALS", value_name: visionAttrs.material });
+}
 
   // === Atributos secundarios para mejorar ranking ===
   // Dimensiones del producto (distintas de SELLER_PACKAGE_*)
@@ -685,9 +688,10 @@ export const publishProductAsFreeListing = async (
   if (visionAttrs.approx_depth_cm) addIfMissing({ id: "DEPTH", value_name: `${visionAttrs.approx_depth_cm} cm` });
 
   // Edad recomendada
-  if (visionAttrs.recommended_age) {
-    addIfMissing({ id: "RECOMMENDED_AGE", value_name: `${visionAttrs.recommended_age} años` });
-  }
+ if (visionAttrs.recommended_age) {
+  addIfMissing({ id: "MIN_AGE_RECOMMENDED", value_name: String(visionAttrs.recommended_age) });
+  addIfMissing({ id: "RECOMMENDED_AGE", value_name: String(visionAttrs.recommended_age) });
+}
 
   // Booleanos detectados con certeza → "Sí" o "No"
   // Solo mandamos si Vision dio true/false explícito (no null)
