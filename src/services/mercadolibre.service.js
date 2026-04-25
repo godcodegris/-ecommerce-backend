@@ -669,7 +669,6 @@ export const publishProductAsFreeListing = async (
     }
   };
 
-  // Completar con Vision SOLO si Vision realmente detectó algo (no null)
 // Completar con Vision SOLO si Vision realmente detectó algo (no null)
   if (visionAttrs.brand) addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
   if (visionAttrs.alphanumeric_model) addIfMissing({ id: "MODEL", value_name: visionAttrs.alphanumeric_model });
@@ -678,6 +677,48 @@ export const publishProductAsFreeListing = async (
   if (visionAttrs.collection) addIfMissing({ id: "COLLECTION", value_name: visionAttrs.collection });
   if (visionAttrs.line) addIfMissing({ id: "LINE", value_name: visionAttrs.line });
   if (visionAttrs.material) addIfMissing({ id: "MATERIAL", value_name: visionAttrs.material });
+
+  // === Atributos secundarios para mejorar ranking ===
+  // Dimensiones del producto (distintas de SELLER_PACKAGE_*)
+  if (visionAttrs.approx_height_cm) addIfMissing({ id: "HEIGHT", value_name: `${visionAttrs.approx_height_cm} cm` });
+  if (visionAttrs.approx_width_cm) addIfMissing({ id: "WIDTH", value_name: `${visionAttrs.approx_width_cm} cm` });
+  if (visionAttrs.approx_depth_cm) addIfMissing({ id: "DEPTH", value_name: `${visionAttrs.approx_depth_cm} cm` });
+
+  // Edad recomendada
+  if (visionAttrs.recommended_age) {
+    addIfMissing({ id: "RECOMMENDED_AGE", value_name: `${visionAttrs.recommended_age} años` });
+  }
+
+  // Booleanos detectados con certeza → "Sí" o "No"
+  // Solo mandamos si Vision dio true/false explícito (no null)
+  if (visionAttrs.is_articulated === true) addIfMissing({ id: "IS_ARTICULATED", value_name: "Sí" });
+  else if (visionAttrs.is_articulated === false) addIfMissing({ id: "IS_ARTICULATED", value_name: "No" });
+
+  if (visionAttrs.is_bobblehead === true) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "Sí" });
+  else if (visionAttrs.is_bobblehead === false) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "No" });
+
+  if (visionAttrs.has_remote_control === true) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "Sí" });
+  else if (visionAttrs.has_remote_control === false) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "No" });
+
+  if (visionAttrs.includes_accessories === true) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "Sí" });
+  else if (visionAttrs.includes_accessories === false) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "No" });
+
+  if (visionAttrs.has_interchangeable_parts === true) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "Sí" });
+  else if (visionAttrs.has_interchangeable_parts === false) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "No" });
+
+  if (visionAttrs.has_lights === true) addIfMissing({ id: "WITH_LIGHTS", value_name: "Sí" });
+  else if (visionAttrs.has_lights === false) addIfMissing({ id: "WITH_LIGHTS", value_name: "No" });
+
+  // Es coleccionable: siempre Sí (estás vendiendo coleccionables)
+  addIfMissing({ id: "IS_COLLECTIBLE", value_name: "Sí" });
+
+  // Texto libre solo si Vision detectó
+  if (visionAttrs.scale) addIfMissing({ id: "SCALE", value_name: visionAttrs.scale });
+  if (visionAttrs.play_type) addIfMissing({ id: "PLAY_TYPE", value_name: visionAttrs.play_type });
+  if (visionAttrs.power_type) addIfMissing({ id: "POWER_TYPE", value_name: visionAttrs.power_type });
+
+  // Año de fabricación
+  if (visionAttrs.year) addIfMissing({ id: "MANUFACTURING_YEAR", value_name: String(visionAttrs.year) });
 
   // Fallbacks finales para atributos que ML suele exigir como obligatorios.
   // Si llegamos acá sin marca, mandamos "Sin marca" (más honesto que inventar).

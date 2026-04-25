@@ -22,7 +22,7 @@ Tu tarea: analizar la foto de un producto y devolver un JSON con esta estructura
   "condition_detected": "new" | "used" | "damaged",
   "confidence": número entre 0 y 100,
   "description": "párrafo descriptivo de 3-5 oraciones, para publicación en MercadoLibre",
-  "attributes": {
+ "attributes": {
     "brand": "marca del producto (ej: Funko, McFarlane, Hasbro, Mattel)" | null,
     "line": "línea específica (ej: Pop!, Legacy, Marvel Legends)" | null,
     "character": "personaje representado (ej: Spider-Man, Batman, Goku)" | null,
@@ -31,10 +31,23 @@ Tu tarea: analizar la foto de un producto y devolver un JSON con esta estructura
     "material": "material principal si es evidente (ej: PVC, resina, vinilo, papel)" | null,
     "package_condition": "sealed_box | open_box | loose | no_package",
     "approx_height_cm": número estimado en centímetros | null,
+    "approx_width_cm": número estimado de ancho en centímetros | null,
+    "approx_depth_cm": número estimado de profundidad en centímetros | null,
     "is_exclusive": true | false,
     "exclusive_store": "tienda de exclusividad si aplica (ej: Pop In A Box, GameStop)" | null,
     "year": "año de lanzamiento si visible" | null,
-    "estimated_category": "categoría aproximada (ej: figura_accion, funko_pop, card_tcg, comic, figura_articulada, vintage)"
+    "estimated_category": "categoría aproximada (ej: figura_accion, funko_pop, card_tcg, comic, figura_articulada, vintage)",
+    "is_articulated": true | false | null,
+    "is_bobblehead": true | false,
+    "has_remote_control": true | false,
+    "has_lights": true | false | null,
+    "has_interchangeable_parts": true | false | null,
+    "includes_accessories": true | false,
+    "is_collectible": true,
+    "scale": "escala si visible en caja (ej: 1:6, 1:12)" | null,
+    "play_type": "tipo de juego/uso (ej: Coleccionable, Acción, Decorativo)" | null,
+    "power_type": "tipo de alimentación si aplica (ej: Pilas, No requiere)" | null,
+    "recommended_age": número entero de edad mínima recomendada en años | null
   }
 }
 
@@ -60,6 +73,15 @@ Reglas para attributes:
 - "package_condition" siempre se debe poder inferir viendo la foto.
 - "estimated_category" siempre se debe poder inferir.
 - "is_exclusive": true solo si ves sticker/marca de exclusividad explícita.
+- "is_collectible": siempre true (estás analizando coleccionables).
+- "is_bobblehead": true solo si la cabeza es desproporcionadamente grande respecto al cuerpo Y se ve que oscila/está montada en resorte (típico de Funko Pop, McFarlane Sportspicks).
+- "is_articulated": true si ves articulaciones en hombros/codos/rodillas/cintura. false si es claramente estática (Funko Pop estándar, estatua). null si no podés determinarlo.
+- "has_remote_control": true solo si ves un control remoto en la foto o en la caja como accesorio.
+- "has_lights" y "power_type": null a menos que sea OBVIO (ej: lightsaber con LED visible, robot con pantalla).
+- "includes_accessories": true si ves armas, capas, bases, manos extra, o cualquier ítem adicional al personaje.
+- "scale": null a menos que veas claramente "1:6", "1:12", "1/6" en la caja o el producto.
+- "approx_width_cm" y "approx_depth_cm": estimación basada en proporciones típicas. Si solo ves la figura de frente, profundidad ≈ ancho/2.
+- "recommended_age": 14+ para coleccionables detallados (Funko Pop, McFarlane), 4+ para juguetes robustos. null si no estás seguro.
 
 IMPORTANTE: Devolvé SOLO el JSON, sin backticks, sin "aquí tienes:", sin explicaciones adicionales.`;
 
