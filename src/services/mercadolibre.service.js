@@ -296,23 +296,26 @@ export const publishProductFromJSON = async (productData, visionResult = null) =
       );
 
       // Aplicar reglas estrictas
-      const cumpleSimilitud = similitud >= UMBRAL_SIMILITUD;
-      const cumpleConfidence = !visionResult || visionResult.confidence >= MIN_VISION_CONFIDENCE;
-      const tieneIdentificador = !visionResult || !REQUIERE_BRAND_O_MODEL ||
-        (visionResult.attributes?.brand || visionResult.attributes?.alphanumeric_model);
+  // Aliases por bloque del schema (estilo opción B, consistente con vision.routes.js)
+const visionAF = visionResult?.action_figure || {};
 
-      if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
-        catalogMatch = searchResult;
-        console.log(`[publishProductFromJSON] ✅ Match de catálogo aceptado`);
-      } else {
-        // Armar motivo de rechazo para debug/logging
-        const razones = [];
-        if (!cumpleSimilitud) razones.push(`similitud ${similitud.toFixed(2)} < ${UMBRAL_SIMILITUD}`);
-        if (!cumpleConfidence) razones.push(`vision confidence ${visionResult.confidence} < ${MIN_VISION_CONFIDENCE}`);
-        if (!tieneIdentificador) razones.push(`sin brand ni alphanumeric_model`);
-        rechazoMotivo = razones.join(" | ");
-        console.log(`[publishProductFromJSON] ❌ Match rechazado: ${rechazoMotivo}`);
-      }
+const cumpleSimilitud = similitud >= UMBRAL_SIMILITUD;
+const cumpleConfidence = !visionResult || visionResult.type_confidence >= MIN_VISION_CONFIDENCE;
+const tieneIdentificador = !visionResult || !REQUIERE_BRAND_O_MODEL ||
+  (visionAF.manufacturer || visionAF.alphanumeric_model);
+
+if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
+  catalogMatch = searchResult;
+  console.log(`[publishProductFromJSON] ✅ Match de catálogo aceptado`);
+} else {
+  // Armar motivo de rechazo para debug/logging
+  const razones = [];
+  if (!cumpleSimilitud) razones.push(`similitud ${similitud.toFixed(2)} < ${UMBRAL_SIMILITUD}`);
+  if (!cumpleConfidence) razones.push(`vision confidence ${visionResult.type_confidence} < ${MIN_VISION_CONFIDENCE}`);
+  if (!tieneIdentificador) razones.push(`sin manufacturer ni alphanumeric_model`);
+  rechazoMotivo = razones.join(" | ");
+  console.log(`[publishProductFromJSON] ❌ Match rechazado: ${rechazoMotivo}`);
+}
     }
   } catch (err) {
     console.warn("[publishProductFromJSON] Search de catálogo falló:", err.message);
