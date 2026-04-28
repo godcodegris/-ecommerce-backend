@@ -296,26 +296,26 @@ export const publishProductFromJSON = async (productData, visionResult = null) =
       );
 
       // Aplicar reglas estrictas
-  // Aliases por bloque del schema (estilo opción B, consistente con vision.routes.js)
-const visionAF = visionResult?.action_figure || {};
+      // Aliases por bloque del schema (estilo opción B, consistente con vision.routes.js)
+      const visionAF = visionResult?.action_figure || {};
 
-const cumpleSimilitud = similitud >= UMBRAL_SIMILITUD;
-const cumpleConfidence = !visionResult || visionResult.type_confidence >= MIN_VISION_CONFIDENCE;
-const tieneIdentificador = !visionResult || !REQUIERE_BRAND_O_MODEL ||
-  (visionAF.manufacturer || visionAF.alphanumeric_model);
+      const cumpleSimilitud = similitud >= UMBRAL_SIMILITUD;
+      const cumpleConfidence = !visionResult || visionResult.type_confidence >= MIN_VISION_CONFIDENCE;
+      const tieneIdentificador = !visionResult || !REQUIERE_BRAND_O_MODEL ||
+        (visionAF.manufacturer || visionAF.alphanumeric_model);
 
-if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
-  catalogMatch = searchResult;
-  console.log(`[publishProductFromJSON] ✅ Match de catálogo aceptado`);
-} else {
-  // Armar motivo de rechazo para debug/logging
-  const razones = [];
-  if (!cumpleSimilitud) razones.push(`similitud ${similitud.toFixed(2)} < ${UMBRAL_SIMILITUD}`);
-  if (!cumpleConfidence) razones.push(`vision confidence ${visionResult.type_confidence} < ${MIN_VISION_CONFIDENCE}`);
-  if (!tieneIdentificador) razones.push(`sin manufacturer ni alphanumeric_model`);
-  rechazoMotivo = razones.join(" | ");
-  console.log(`[publishProductFromJSON] ❌ Match rechazado: ${rechazoMotivo}`);
-}
+      if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
+        catalogMatch = searchResult;
+        console.log(`[publishProductFromJSON] ✅ Match de catálogo aceptado`);
+      } else {
+        // Armar motivo de rechazo para debug/logging
+        const razones = [];
+        if (!cumpleSimilitud) razones.push(`similitud ${similitud.toFixed(2)} < ${UMBRAL_SIMILITUD}`);
+        if (!cumpleConfidence) razones.push(`vision confidence ${visionResult.type_confidence} < ${MIN_VISION_CONFIDENCE}`);
+        if (!tieneIdentificador) razones.push(`sin manufacturer ni alphanumeric_model`);
+        rechazoMotivo = razones.join(" | ");
+        console.log(`[publishProductFromJSON] ❌ Match rechazado: ${rechazoMotivo}`);
+      }
     }
   } catch (err) {
     console.warn("[publishProductFromJSON] Search de catálogo falló:", err.message);
@@ -332,8 +332,8 @@ if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
     };
   }
 
- // 3. Traer info del catálogo para obtener category_id
-// Obtener category_id del catálogo (necesario para el POST)
+  // 3. Traer info del catálogo para obtener category_id
+  // Obtener category_id del catálogo (necesario para el POST)
   let categoryIdFromCatalog = null;
   try {
     const catalogInfo = await getCatalogProductInfo(catalogMatch.catalog_product_id);
@@ -429,9 +429,10 @@ const improveDescriptionWithClaude = async (rawDescription, visionAttrs) => {
     return rawDescription;
   }
 
+  // visionAttrs ahora viene como merge de visionCommon + visionAF
   const character = visionAttrs.character || "el producto";
-  const collection = visionAttrs.collection || "";
-  const brand = visionAttrs.brand || "";
+  const franchise = visionAttrs.franchise || "";
+  const manufacturer = visionAttrs.manufacturer || "";
 
   const prompt = `Sos un copywriter especializado en publicaciones de coleccionables en MercadoLibre Argentina.
 
@@ -442,8 +443,8 @@ DESCRIPCIÓN ORIGINAL:
 
 CONTEXTO:
 - Personaje: ${character}
-- Colección: ${collection}
-- Marca: ${brand}
+- Franquicia: ${franchise}
+- Fabricante: ${manufacturer}
 
 INSTRUCCIONES:
 - Conservá el tono informativo y el contenido factual
@@ -484,22 +485,26 @@ INSTRUCCIONES:
 };
 
 const buildEnrichedDescription = async (productData, visionResult) => {
-  const visionAttrs = visionResult?.attributes || {};
-  const rawText = visionResult?.description || productData.description || "Producto coleccionable.";
+  // Aliases por bloque del schema nuevo
+  const visionCommon = visionResult?.common || {};
+  const visionAF = visionResult?.action_figure || {};
+
+  const rawText = visionCommon.description || productData.description || "Producto coleccionable.";
 
   // BLOQUE 1: descripción narrativa mejorada
-  const improvedText = await improveDescriptionWithClaude(rawText, visionAttrs);
+  // Pasamos un merge de common + AF para que improveDescription tenga todo el contexto
+  const improvedText = await improveDescriptionWithClaude(rawText, { ...visionCommon, ...visionAF });
 
   // BLOQUE 2: atributos técnicos
   const techLines = [];
-  if (visionAttrs.brand) techLines.push(`<strong>Marca:</strong> ${visionAttrs.brand}`);
-  if (visionAttrs.character) techLines.push(`<strong>Personaje:</strong> ${visionAttrs.character}`);
-  if (visionAttrs.collection) techLines.push(`<strong>Colección:</strong> ${visionAttrs.collection}`);
-  if (visionAttrs.line) techLines.push(`<strong>Línea:</strong> ${visionAttrs.line}`);
-  if (visionAttrs.alphanumeric_model) techLines.push(`<strong>Modelo:</strong> ${visionAttrs.alphanumeric_model}`);
-  if (visionAttrs.material) techLines.push(`<strong>Material:</strong> ${visionAttrs.material}`);
-  if (visionAttrs.approx_height_cm) techLines.push(`<strong>Altura aproximada:</strong> ${visionAttrs.approx_height_cm} cm`);
-  if (visionAttrs.year) techLines.push(`<strong>Año:</strong> ${visionAttrs.year}`);
+  if (visionAF.manufacturer) techLines.push(`<strong>Marca:</strong> ${visionAF.manufacturer}`);
+  if (visionAF.character) techLines.push(`<strong>Personaje:</strong> ${visionAF.character}`);
+  if (visionAF.franchise) techLines.push(`<strong>Colección:</strong> ${visionAF.franchise}`);
+  if (visionAF.product_line) techLines.push(`<strong>Línea:</strong> ${visionAF.product_line}`);
+  if (visionAF.alphanumeric_model) techLines.push(`<strong>Modelo:</strong> ${visionAF.alphanumeric_model}`);
+  if (visionCommon.material) techLines.push(`<strong>Material:</strong> ${visionCommon.material}`);
+  if (visionCommon.approx_height_cm) techLines.push(`<strong>Altura aproximada:</strong> ${visionCommon.approx_height_cm} cm`);
+  if (visionCommon.manufacturing_year) techLines.push(`<strong>Año:</strong> ${visionCommon.manufacturing_year}`);
 
   const packageMap = {
     sealed_box: "Caja sellada original",
@@ -507,8 +512,8 @@ const buildEnrichedDescription = async (productData, visionResult) => {
     loose: "Sin caja (loose)",
     no_package: "Sin empaque",
   };
-  if (visionAttrs.package_condition && packageMap[visionAttrs.package_condition]) {
-    techLines.push(`<strong>Estado del empaque:</strong> ${packageMap[visionAttrs.package_condition]}`);
+  if (visionCommon.package_condition && packageMap[visionCommon.package_condition]) {
+    techLines.push(`<strong>Estado del empaque:</strong> ${packageMap[visionCommon.package_condition]}`);
   }
 
   const techBlock = techLines.length > 0
@@ -516,10 +521,10 @@ const buildEnrichedDescription = async (productData, visionResult) => {
     : "";
 
   // BLOQUE 3: disclaimer condicional (solo vintage / usado)
-  const detectedCondition = visionResult?.condition_detected;
+  const detectedCondition = visionCommon.condition;
   const isVintageOrUsed = detectedCondition === "used" || detectedCondition === "damaged";
 
- const disclaimer = isVintageOrUsed
+  const disclaimer = isVintageOrUsed
     ? `<br><br><strong>--- IMPORTANTE ---</strong><br>Producto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real del producto. Ante cualquier duda, consultá antes de comprar.`
     : "";
 
@@ -599,7 +604,7 @@ export const publishProductAsFreeListing = async (
   const categoryId = chosen.category_id;
   console.log(`[publishAsFreeListing] ✅ Categoría elegida: ${categoryId} (${chosen.category_name}) — domain: ${chosen.domain_id}`);
 
-// ========================================================================
+  // ========================================================================
   // 2. Subir las fotos del usuario (Promise.allSettled — tolera fallas parciales)
   // ========================================================================
   console.log(`[publishAsFreeListing] Subiendo ${images.length} foto(s)...`);
@@ -636,7 +641,9 @@ export const publishProductAsFreeListing = async (
   // ========================================================================
   // 3. Construir atributos combinando: pre-rellenados de discovery + Vision + defaults
   // ========================================================================
- const visionAttrs = visionResult?.attributes || {};
+  // Aliases por bloque del schema nuevo (consistente con vision.routes.js)
+  const visionCommon = visionResult?.common || {};
+  const visionAF = visionResult?.action_figure || {};
   const preFilled = chosen.attributes || [];
 
   // Lista de atributos "inseguros" que ML pre-rellena asumiendo el catalog de
@@ -672,69 +679,74 @@ export const publishProductAsFreeListing = async (
     }
   };
 
-// Completar con Vision SOLO si Vision realmente detectó algo (no null)
   // Completar con Vision SOLO si Vision realmente detectó algo (no null)
   // Excepción: si el producto viene loose (sin caja), NO confiamos en la marca
   // porque no podemos verificar autenticidad. Mandamos "Sin marca" para evitar
   // que ML exija GTIN obligatorio (lo activan ciertas marcas conocidas).
-  const isLoose = visionAttrs.package_condition === "loose";
-  if (visionAttrs.brand && !isLoose) {
-    addIfMissing({ id: "BRAND", value_name: visionAttrs.brand });
-  } else if (isLoose && visionAttrs.brand) {
-    console.log(`[publishAsFreeListing] ℹ️ Producto loose, ignorando BRAND="${visionAttrs.brand}" detectado por Vision (evita exigencia de GTIN)`);
+  const isLoose = visionCommon.package_condition === "loose";
+  if (visionAF.manufacturer && !isLoose) {
+    addIfMissing({ id: "BRAND", value_name: visionAF.manufacturer });
+  } else if (isLoose && visionAF.manufacturer) {
+    console.log(`[publishAsFreeListing] ℹ️ Producto loose, ignorando manufacturer="${visionAF.manufacturer}" detectado por Vision (evita exigencia de GTIN)`);
   }
-  if (visionAttrs.alphanumeric_model) addIfMissing({ id: "MODEL", value_name: visionAttrs.alphanumeric_model });
-  if (visionAttrs.alphanumeric_model) addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: visionAttrs.alphanumeric_model });
-  if (visionAttrs.character) addIfMissing({ id: "CHARACTER", value_name: visionAttrs.character });
-  if (visionAttrs.collection) addIfMissing({ id: "COLLECTION", value_name: visionAttrs.collection });
-  if (visionAttrs.line) addIfMissing({ id: "LINE", value_name: visionAttrs.line });
-  if (visionAttrs.material) {
-  addIfMissing({ id: "MATERIAL", value_name: visionAttrs.material });
-  addIfMissing({ id: "MATERIALS", value_name: visionAttrs.material });
-}
+
+  if (visionAF.alphanumeric_model) {
+    addIfMissing({ id: "MODEL", value_name: visionAF.alphanumeric_model });
+    addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: visionAF.alphanumeric_model });
+  }
+  if (visionAF.character) addIfMissing({ id: "CHARACTER", value_name: visionAF.character });
+  if (visionAF.franchise) addIfMissing({ id: "COLLECTION", value_name: visionAF.franchise });
+  if (visionAF.product_line) addIfMissing({ id: "LINE", value_name: visionAF.product_line });
+
+  if (visionCommon.material) {
+    addIfMissing({ id: "MATERIAL", value_name: visionCommon.material });
+    addIfMissing({ id: "MATERIALS", value_name: visionCommon.material });
+  }
 
   // === Atributos secundarios para mejorar ranking ===
   // Dimensiones del producto (distintas de SELLER_PACKAGE_*)
-  if (visionAttrs.approx_height_cm) addIfMissing({ id: "HEIGHT", value_name: `${visionAttrs.approx_height_cm} cm` });
-  if (visionAttrs.approx_width_cm) addIfMissing({ id: "WIDTH", value_name: `${visionAttrs.approx_width_cm} cm` });
-  if (visionAttrs.approx_depth_cm) addIfMissing({ id: "DEPTH", value_name: `${visionAttrs.approx_depth_cm} cm` });
+  if (visionCommon.approx_height_cm) addIfMissing({ id: "HEIGHT", value_name: `${visionCommon.approx_height_cm} cm` });
+  if (visionCommon.approx_width_cm) addIfMissing({ id: "WIDTH", value_name: `${visionCommon.approx_width_cm} cm` });
+  if (visionCommon.approx_depth_cm) addIfMissing({ id: "DEPTH", value_name: `${visionCommon.approx_depth_cm} cm` });
 
   // Edad recomendada
- if (visionAttrs.recommended_age) {
-  addIfMissing({ id: "MIN_AGE_RECOMMENDED", value_name: String(visionAttrs.recommended_age) });
-  addIfMissing({ id: "RECOMMENDED_AGE", value_name: String(visionAttrs.recommended_age) });
-}
+  if (visionAF.recommended_age) {
+    addIfMissing({ id: "MIN_AGE_RECOMMENDED", value_name: String(visionAF.recommended_age) });
+    addIfMissing({ id: "RECOMMENDED_AGE", value_name: String(visionAF.recommended_age) });
+  }
 
   // Booleanos detectados con certeza → "Sí" o "No"
   // Solo mandamos si Vision dio true/false explícito (no null)
-  if (visionAttrs.is_articulated === true) addIfMissing({ id: "IS_ARTICULATED", value_name: "Sí" });
-  else if (visionAttrs.is_articulated === false) addIfMissing({ id: "IS_ARTICULATED", value_name: "No" });
+  if (visionAF.is_articulated === true) addIfMissing({ id: "IS_ARTICULATED", value_name: "Sí" });
+  else if (visionAF.is_articulated === false) addIfMissing({ id: "IS_ARTICULATED", value_name: "No" });
 
-  if (visionAttrs.is_bobblehead === true) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "Sí" });
-  else if (visionAttrs.is_bobblehead === false) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "No" });
+  if (visionAF.is_bobblehead === true) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "Sí" });
+  else if (visionAF.is_bobblehead === false) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "No" });
 
-  if (visionAttrs.has_remote_control === true) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "Sí" });
-  else if (visionAttrs.has_remote_control === false) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "No" });
+  if (visionAF.has_remote_control === true) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "Sí" });
+  else if (visionAF.has_remote_control === false) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "No" });
 
-  if (visionAttrs.includes_accessories === true) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "Sí" });
-  else if (visionAttrs.includes_accessories === false) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "No" });
+  if (visionAF.includes_accessories === true) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "Sí" });
+  else if (visionAF.includes_accessories === false) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "No" });
 
-  if (visionAttrs.has_interchangeable_parts === true) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "Sí" });
-  else if (visionAttrs.has_interchangeable_parts === false) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "No" });
+  if (visionAF.has_interchangeable_parts === true) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "Sí" });
+  else if (visionAF.has_interchangeable_parts === false) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "No" });
 
-  if (visionAttrs.has_lights === true) addIfMissing({ id: "WITH_LIGHTS", value_name: "Sí" });
-  else if (visionAttrs.has_lights === false) addIfMissing({ id: "WITH_LIGHTS", value_name: "No" });
+  if (visionAF.has_lights === true) addIfMissing({ id: "WITH_LIGHTS", value_name: "Sí" });
+  else if (visionAF.has_lights === false) addIfMissing({ id: "WITH_LIGHTS", value_name: "No" });
 
   // Es coleccionable: siempre Sí (estás vendiendo coleccionables)
   addIfMissing({ id: "IS_COLLECTIBLE", value_name: "Sí" });
 
   // Texto libre solo si Vision detectó
-  if (visionAttrs.scale) addIfMissing({ id: "SCALE", value_name: visionAttrs.scale });
-  if (visionAttrs.play_type) addIfMissing({ id: "PLAY_TYPE", value_name: visionAttrs.play_type });
-  if (visionAttrs.power_type) addIfMissing({ id: "POWER_TYPE", value_name: visionAttrs.power_type });
+  if (visionAF.scale) addIfMissing({ id: "SCALE", value_name: visionAF.scale });
+  if (visionAF.play_type) addIfMissing({ id: "PLAY_TYPE", value_name: visionAF.play_type });
+  if (visionAF.power_type) addIfMissing({ id: "POWER_TYPE", value_name: visionAF.power_type });
 
   // Año de fabricación
-  if (visionAttrs.year) addIfMissing({ id: "MANUFACTURING_YEAR", value_name: String(visionAttrs.year) });
+  if (visionCommon.manufacturing_year) {
+    addIfMissing({ id: "MANUFACTURING_YEAR", value_name: String(visionCommon.manufacturing_year) });
+  }
 
   // Fallbacks finales para atributos que ML suele exigir como obligatorios.
   // Si llegamos acá sin marca, mandamos "Sin marca" (más honesto que inventar).
@@ -743,6 +755,10 @@ export const publishProductAsFreeListing = async (
   addIfMissing({ id: "BRAND", value_name: "Sin marca" });
   addIfMissing({ id: "MODEL", value_name: "N/A" });
   addIfMissing({ id: "ALPHANUMERIC_MODEL", value_name: "N/A" });
+  // Fallback nuevo para COLLECTION — ML lo exige como obligatorio en MLA3422.
+  // Si Vision no detectó franchise, mandamos "Otra" para no bloquear publicación.
+  addIfMissing({ id: "COLLECTION", value_name: "Otra" });
+
   // Obligatorios con value_id conocidos (de debug)
   addIfMissing({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });  // "El producto no tiene código registrado"
   addIfMissing({ id: "VALUE_ADDED_TAX", value_id: "48405909" });     // "21 %"
@@ -759,17 +775,17 @@ export const publishProductAsFreeListing = async (
   // ========================================================================
   // 4. Payload — omitimos title (ML lo arma desde family_name + attributes)
   // ========================================================================
-// Armar descripción enriquecida (Vision mejorado + atributos + disclaimer)
+  // Armar descripción enriquecida (Vision mejorado + atributos + disclaimer)
   console.log("[publishAsFreeListing] Generando descripción enriquecida...");
- const enrichedDescription = await buildEnrichedDescription(productData, visionResult);
+  const enrichedDescription = await buildEnrichedDescription(productData, visionResult);
 
-  // family _name único — combina personaje + datos distintivos + ID corto
+  // family_name único — combina personaje + datos distintivos + ID corto
   // El ID al final garantiza que ML no agrupe esta publicación con otras del mismo personaje.
-  const baseFamily = visionAttrs.character || visionAttrs.collection || "Figura coleccionable";
+  const baseFamily = visionAF.character || visionAF.franchise || "Figura coleccionable";
   const distinctiveBits = [
-    visionAttrs.alphanumeric_model,
-    visionAttrs.year,
-    visionAttrs.brand,
+    visionAF.alphanumeric_model,
+    visionCommon.manufacturing_year,
+    visionAF.manufacturer,
   ].filter(Boolean).join(" ");
 
   const familyName = distinctiveBits
@@ -842,7 +858,7 @@ export const publishProductAsFreeListing = async (
     );
   }
 
- console.log(`[publishAsFreeListing] ✅ Publicado: ${data.id}`);
+  console.log(`[publishAsFreeListing] ✅ Publicado: ${data.id}`);
 
   // ========================================================================
   // 6. SEGUNDA LLAMADA: setear descripción en el endpoint específico de ML
@@ -850,7 +866,7 @@ export const publishProductAsFreeListing = async (
   // llamar al endpoint /items/{id}/description aparte para que la persista.
   // ========================================================================
   try {
- // ML rechaza el campo html aquí. Solo aceptamos plain_text limpio.
+    // ML rechaza el campo html aquí. Solo aceptamos plain_text limpio.
     const plainTextOnly = typeof enrichedDescription === "object"
       ? enrichedDescription.plain_text
       : enrichedDescription;
