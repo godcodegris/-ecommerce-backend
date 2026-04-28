@@ -1177,6 +1177,13 @@ const buildComicAttributes = (visionResult) => {
   if (c.writer) attrs.push({ id: "AUTHOR", value_name: c.writer });
   if (c.artist) attrs.push({ id: "ILLUSTRATOR", value_name: c.artist });
 
+  // Dimensiones del paquete (obligatorias en MLA1955)
+  // Defaults razonables para un cómic single issue
+  attrs.push({ id: "SELLER_PACKAGE_HEIGHT", value_name: "1 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WIDTH", value_name: "17 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "26 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "150 g" });
+
   return attrs;
 };
 
