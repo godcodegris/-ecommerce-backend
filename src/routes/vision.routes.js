@@ -101,6 +101,13 @@ ESCALA DE CONFIDENCE (type_confidence):
 
 REGLAS DE DIMENSIONES:
 - approx_width_cm y approx_depth_cm: estimación basada en proporciones típicas. Si solo ves la figura de frente, profundidad ≈ ancho/2.
+REGLAS ESPECÍFICAS DE CÓMICS:
+- title: el título de la serie SIN el número (ej: "The Amazing Spider-Man", "Fierro"). Si el cómic dice "Spider-Man #300", title="The Amazing Spider-Man" y issue_number="300".
+- issue_number: solo el número, sin el "#" (ej: "300", "7", "10").
+- publisher: editorial real visible (Marvel, DC, Image, Editorial Domus para Fierro vintage). Si no la ves, null.
+- genre: clasificá por temática del cómic. Superhéroes/aventura/fantasía/sci-fi → "Interés general". Comics infantiles/Disney → "Infantil". Historieta de autor/literaria → "Arte". Si no estás seguro → "Interés general".
+- format: "single_issue" para cómics grapa individuales (lo más común). "magazine" para revistas tipo Fierro, Lazer, etc.
+- variant_cover: true SOLO si ves explícitamente "Variant Cover", "Variant Edition", o un código de variante en la portada.
 
 REGLAS ESPECÍFICAS DE FIGURAS:
 - is_bobblehead: true SOLO si la cabeza está montada sobre un resorte y oscila visiblemente. Los Funko Pop NO son bobbleheads aunque tengan cabeza grande — son vinyl figures estáticas. McFarlane Sportspicks sí suelen ser bobbleheads.
@@ -179,16 +186,8 @@ JSON estricto, sin markdown, sin texto antes ni después:
     "artist": <string o null>,
     "variant_cover": <bool o null>,
     "is_graded": <bool o null>,
-    "grade": <string o null>
-  },
-  "die_cast_vehicle": {
-    "car_brand": <string o null, marca del auto real ej "Ford">,
-    "car_model": <string o null, modelo del auto ej "Mustang GT">,
-    "model_maker": <string o null, fabricante del juguete ej "Hot Wheels">,
-    "scale": <string o null, ej "1:64">,
-    "car_year": <entero o null, año del auto real, NO del juguete>,
-    "has_original_box": <bool o null>,
-    "is_limited_edition": <bool o null>
+    "grade": <string o null>,
+    "genre": "Arte" | "Autos y motos" | "Ciencia" | "Deportes" | "Historia" | "Infantil" | "Interés general" | "Música" | "Tecnología" | "Moda" | null
   },
   "collectible_decor": {
     "subtype": <string o null, ej "busto", "diorama", "estatua", "figurín">,
@@ -366,7 +365,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
       });
     }
 
-    const SUPPORTED_FOR_PUBLISHING = ["action_figure"]; // hoy solo figuras se publican automáticamente
+    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic"]; // figuras y cómics
     if (!SUPPORTED_FOR_PUBLISHING.includes(visionResult.item_type)) {
       const motivoTipoNoImpl = `Tipo "${visionResult.item_type}" detectado correctamente (confidence ${visionResult.type_confidence}%) pero falta implementar publicación automática para este tipo.`;
 
@@ -419,7 +418,12 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
       console.log("[publish/create] Sin catálogo. Intentando fallback libre...");
 
       try {
-        const freeListingResponse = await mlService.publishProductAsFreeListing(
+           // Routing por item_type: cada tipo tiene su propia función de publicación
+        const publishFn = visionResult.item_type === "comic"
+          ? mlService.publishComicAsFreeListing
+          : mlService.publishProductAsFreeListing;
+
+        const freeListingResponse = await publishFn(
           {
             title: visionCommon.title_suggestion,
             price,

@@ -1109,6 +1109,233 @@ export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
   };
 };
 
+
+// ============================================================================
+// PUBLICACIÓN DE CÓMICS — flujo dedicado para item_type="comic"
+// Categoría hardcodeada: MLA1955 (Revistas), porque domain_discovery devuelve
+// resultados inservibles para cómics (los manda a Trading Cards, Ebooks, etc).
+// ============================================================================
+
+const COMIC_CATEGORY_ID = "MLA1955"; // Revistas — bucket donde ML mete cómics
+
+/**
+ * Construye el array de atributos para publicar un cómic en MLA1955.
+ * Combina valores detectados por Vision + hardcodes para campos fijos.
+ */
+const buildComicAttributes = (visionResult) => {
+  const c = visionResult?.comic || {};
+  const attrs = [];
+
+  // === Atributos requeridos (catalog_required / required) ===
+
+  // MAGAZINE_NAME: nombre de la serie/revista
+  if (c.title) {
+    attrs.push({ id: "MAGAZINE_NAME", value_name: c.title });
+  } else {
+    attrs.push({ id: "MAGAZINE_NAME", value_name: "Sin nombre" });
+  }
+
+  // PUBLISHER (editorial) y BRAND (marca) — en cómics suelen coincidir
+  const publisherValue = c.publisher || "Sin editorial";
+  attrs.push({ id: "PUBLISHER", value_name: publisherValue });
+  attrs.push({ id: "BRAND", value_name: publisherValue });
+
+  // MODEL: en revistas ML usa "Revista" como string genérico
+  attrs.push({ id: "MODEL", value_name: "Revista" });
+
+  // FORMAT: hardcode "Físico" (id 2431740)
+  attrs.push({ id: "FORMAT", value_id: "2431740" });
+
+  // GENRE: "Interés general" como fallback
+  attrs.push({ id: "GENRE", value_name: c.genre || "Interés general" });
+
+  // UNITS_PER_PACK: por default 1
+  attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
+
+  // GTIN no lo tenemos → mandamos EMPTY_GTIN_REASON
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" }); // "no tiene código registrado"
+
+  // Impuestos (igual que figuras)
+  attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
+  attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" }); // "0 %"
+
+  // === Atributos opcionales pero útiles para SEO/ranking ===
+
+  if (c.issue_number) {
+    attrs.push({ id: "ISSUE_NUMBER", value_name: c.issue_number });
+  }
+
+  if (c.year) {
+    attrs.push({ id: "PUBLICATION_YEAR", value_name: String(c.year) });
+  }
+
+  if (c.language) {
+    const langMap = { es: "Español", en: "Inglés", pt: "Portugués", jp: "Japonés" };
+    attrs.push({ id: "LANGUAGE", value_name: langMap[c.language] || "Español" });
+  }
+
+  if (c.writer) attrs.push({ id: "AUTHOR", value_name: c.writer });
+  if (c.artist) attrs.push({ id: "ILLUSTRATOR", value_name: c.artist });
+
+  return attrs;
+};
+
+/**
+ * Publica un cómic en MercadoLibre como publicación libre.
+ * Categoría forzada: MLA1955 (Revistas).
+ */
+export const publishComicAsFreeListing = async (productData, images, visionResult) => {
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("publishComicAsFreeListing requiere al menos 1 imagen");
+  }
+
+  const token = await getValidToken();
+  const visionCommon = visionResult?.common || {};
+  const visionComic = visionResult?.comic || {};
+
+  // ID único para evitar agrupación de variantes
+  const uniqueId = Date.now().toString().slice(-5);
+
+  console.log(`[publishComicAsFreeListing] Categoría forzada: ${COMIC_CATEGORY_ID} (Revistas)`);
+
+  // 1. Subir fotos (mismo patrón que figuras)
+  console.log(`[publishComicAsFreeListing] Subiendo ${images.length} foto(s)...`);
+  const uploadResults = await Promise.allSettled(
+    images.map(img => uploadPictureToML(img.buffer, img.mimeType))
+  );
+
+  const successfulIds = [];
+  uploadResults.forEach((r, idx) => {
+    if (r.status === "fulfilled" && r.value) {
+      const id = typeof r.value === "object" ? r.value.id : r.value;
+      if (id) successfulIds.push(id);
+    } else {
+      console.error(`[publishComicAsFreeListing] ❌ Foto ${idx + 1} falló:`, r.reason?.message || r.reason);
+    }
+  });
+
+  if (successfulIds.length === 0) {
+    throw new Error(`Todas las ${images.length} fotos fallaron al subirse a ML`);
+  }
+
+  console.log(`[publishComicAsFreeListing] ✅ ${successfulIds.length}/${images.length} fotos subidas`);
+
+  // 2. Construir atributos
+  const attributes = buildComicAttributes(visionResult);
+
+  // 3. Construir family_name único
+  const baseFamily = visionComic.title || "Revista coleccionable";
+  const issueBit = visionComic.issue_number ? ` #${visionComic.issue_number}` : "";
+  const yearBit = visionComic.year ? ` ${visionComic.year}` : "";
+  const familyName = `${baseFamily}${issueBit}${yearBit} #${uniqueId}`;
+
+  console.log(`[publishComicAsFreeListing] family_name: "${familyName}"`);
+
+  // 4. Construir descripción (versión simple — sin Claude por ahora, podemos mejorar después)
+  const descriptionParts = [];
+  if (visionCommon.description) {
+    descriptionParts.push(visionCommon.description);
+  } else {
+    descriptionParts.push("Revista/cómic coleccionable.");
+  }
+
+  const techLines = [];
+  if (visionComic.title) techLines.push(`Título: ${visionComic.title}`);
+  if (visionComic.issue_number) techLines.push(`Número: ${visionComic.issue_number}`);
+  if (visionComic.publisher) techLines.push(`Editorial: ${visionComic.publisher}`);
+  if (visionComic.year) techLines.push(`Año: ${visionComic.year}`);
+  if (visionComic.language) {
+    const langMap = { es: "Español", en: "Inglés", pt: "Portugués", jp: "Japonés" };
+    techLines.push(`Idioma: ${langMap[visionComic.language] || visionComic.language}`);
+  }
+  if (visionComic.writer) techLines.push(`Guionista: ${visionComic.writer}`);
+  if (visionComic.artist) techLines.push(`Dibujante: ${visionComic.artist}`);
+
+  if (techLines.length > 0) {
+    descriptionParts.push("\n--- DETALLES ---\n" + techLines.join("\n"));
+  }
+
+  // Disclaimer si es vintage/usado (Vision detectó condition != new)
+  if (visionCommon.condition === "used" || visionCommon.condition === "damaged") {
+    descriptionParts.push(
+      "\n--- IMPORTANTE ---\nProducto usado/vintage. Las fotos forman parte de la descripción y reflejan el estado real. Ante cualquier duda, consultá antes de comprar."
+    );
+  }
+
+  const plainDescription = descriptionParts.join("\n");
+
+  // 5. Payload
+  const item = {
+    family_name: familyName,
+    category_id: COMIC_CATEGORY_ID,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new", // siempre "new" para evitar rechazo
+    pictures: successfulIds.map(id => ({ id })),
+    attributes: attributes,
+    shipping: {
+      mode: "me2",
+      local_pick_up: true,
+      free_shipping: false,
+      tags: ["self_service_in"],
+    },
+  };
+
+  console.log("[publishComicAsFreeListing] PAYLOAD:", JSON.stringify(item, null, 2));
+
+  // 6. Publicar
+  const response = await fetch(`${ML_BASE}/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(item),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    console.error("[publishComicAsFreeListing] ❌ ML rechazó:", JSON.stringify(data, null, 2));
+    throw new Error(
+      `ML rechazó publicación de cómic: ${data.message || data.error} — ${JSON.stringify(data.cause || data)}`
+    );
+  }
+
+  console.log(`[publishComicAsFreeListing] ✅ Publicado: ${data.id}`);
+
+  // 7. Setear descripción aparte (mismo workaround que figuras)
+  try {
+    const descResp = await fetch(`${ML_BASE}/items/${data.id}/description`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plain_text: plainDescription }),
+    });
+
+    if (descResp.ok) {
+      console.log(`[publishComicAsFreeListing] ✅ Descripción seteada en ${data.id}`);
+    } else {
+      const descErr = await descResp.json();
+      console.error(`[publishComicAsFreeListing] ⚠️ Descripción falló:`, JSON.stringify(descErr));
+    }
+  } catch (descErr) {
+    console.error(`[publishComicAsFreeListing] ⚠️ Excepción seteando descripción:`, descErr.message);
+  }
+
+  return {
+    ...data,
+    publication_type: "free_listing",
+    category_id: COMIC_CATEGORY_ID,
+    item_type: "comic",
+  };
+};
+
 // ============================================================================
 // DEBUG / UTILITY: Descubrimiento de categorías y atributos de ML
 // Se usa para descubrir category_id y atributos requeridos antes de
