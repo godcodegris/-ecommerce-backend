@@ -1108,3 +1108,86 @@ export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
     url: data.variations?.[0]?.url || null
   };
 };
+
+// ============================================================================
+// DEBUG / UTILITY: Descubrimiento de categorías y atributos de ML
+// Se usa para descubrir category_id y atributos requeridos antes de
+// implementar nuevos flujos (comic, die_cast_vehicle, collectible_decor).
+// ============================================================================
+
+/**
+ * Descubre el category_id que ML asigna a partir de un título.
+ * @param {string} q - Título del producto (ej: "Fierro Revista Comic Argentina")
+ * @param {number} limit - Cantidad de resultados (default 3, máximo 8)
+ * @returns {Promise<Array>} Array de matches ordenados por probabilidad
+ */
+export const discoverCategoryByTitle = async (q, limit = 3) => {
+  const token = await getValidToken();
+  const url = `${ML_BASE}/sites/MLA/domain_discovery/search?limit=${limit}&q=${encodeURIComponent(q)}`;
+
+  console.log(`[discoverCategoryByTitle] Buscando: "${q}" (limit=${limit})`);
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`ML domain_discovery ${response.status}: ${body}`);
+  }
+
+  return await response.json();
+};
+
+/**
+ * Lista todos los atributos de una categoría, opcionalmente filtrados por obligatoriedad.
+ * @param {string} categoryId - ID de la categoría (ej: "MLA3530")
+ * @param {boolean} onlyRequired - Si true, devuelve solo los obligatorios
+ */
+export const getCategoryAttributes = async (categoryId, onlyRequired = false) => {
+  const token = await getValidToken();
+  const url = `${ML_BASE}/categories/${categoryId}/attributes`;
+
+  console.log(`[getCategoryAttributes] ${categoryId} (only_required=${onlyRequired})`);
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`ML categories ${response.status}: ${body}`);
+  }
+
+  const allAttributes = await response.json();
+
+  if (!onlyRequired) {
+    return {
+      category_id: categoryId,
+      total: allAttributes.length,
+      attributes: allAttributes,
+    };
+  }
+
+  const required = allAttributes.filter(
+    (a) =>
+      a.tags?.required === true ||
+      a.tags?.catalog_required === true ||
+      a.tags?.conditional_required === true ||
+      a.tags?.fixed === true
+  );
+
+  return {
+    category_id: categoryId,
+    total_attributes: allAttributes.length,
+    required_count: required.length,
+    required_attributes: required.map((a) => ({
+      id: a.id,
+      name: a.name,
+      value_type: a.value_type,
+      tags: a.tags,
+      allowed_units: a.allowed_units,
+      values_preview: a.values?.slice(0, 10),
+    })),
+  };
+};

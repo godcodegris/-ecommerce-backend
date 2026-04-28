@@ -36,4 +36,8 @@ router.post("/validar", verificarToken, mlController.validarItem);
 
 router.post("/publicar-masivo", verificarToken, mlController.publicarMasivo);
 
+// Endpoints de descubrimiento de categorías y atributos (debug/utility)
+router.get("/debug/discover-category", mlController.discoverCategory);
+router.get("/debug/category-attributes/:categoryId", mlController.categoryAttributes);
+
 export default router;

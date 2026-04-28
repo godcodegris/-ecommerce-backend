@@ -180,3 +180,82 @@ export const publicarMasivo = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// ============================================
+// DEBUG / UTILITY: Descubrimiento de categorías y atributos
+// Útil para descubrir category_id y atributos requeridos
+// antes de implementar nuevos flujos (comic, die_cast, etc.)
+// ============================================
+
+export const discoverCategory = async (req, res) => {
+  try {
+    const { q, limit = 3 } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        error: "Falta query param 'q' (título del producto a clasificar)",
+        ejemplo: "/mercadolibre/debug/discover-category?q=Fierro Revista Comic Argentina"
+      });
+    }
+
+    const resultado = await mlService.discoverCategoryByTitle(q, parseInt(limit));
+    return res.json({ query: q, results: resultado });
+  } catch (error) {
+    console.error("[discoverCategory] Error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const categoryAttributes = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const { only_required = "false" } = req.query;
+
+    const resultado = await mlService.getCategoryAttributes(
+      categoryId,
+      only_required === "true"
+    );
+    return res.json(resultado);
+  } catch (error) {
+    console.error("[categoryAttributes] Error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================
+// DEBUG / UTILITY: Descubrimiento de categorías
+// ============================================
+
+export const discoverCategory = async (req, res) => {
+  try {
+    const { q, limit = 3 } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        error: "Falta query param 'q'",
+        ejemplo: "/mercadolibre/debug/discover-category?q=Fierro Revista Comic Argentina",
+      });
+    }
+
+    const resultado = await mlService.discoverCategoryByTitle(q, parseInt(limit));
+    return res.json({ query: q, results: resultado });
+  } catch (error) {
+    console.error("[discoverCategory] Error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const categoryAttributes = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const { only_required = "false" } = req.query;
+
+    const resultado = await mlService.getCategoryAttributes(
+      categoryId,
+      only_required === "true"
+    );
+    return res.json(resultado);
+  } catch (error) {
+    console.error("[categoryAttributes] Error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
