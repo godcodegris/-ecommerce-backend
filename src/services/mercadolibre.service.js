@@ -1160,7 +1160,8 @@ const buildComicAttributes = (visionResult) => {
   attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
 
   // GTIN no lo tenemos → mandamos EMPTY_GTIN_REASON
-  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" }); // "no tiene código registrado"
+  attrs.push({ id: "GTIN", value_name: "" });
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
 
   // Impuestos (igual que figuras)
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
