@@ -349,6 +349,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
 
     const stock = parseInt(req.body.stock) || 1;
     const userGtin = req.body.gtin?.trim() || null;
+    const userBrand = req.body.brand?.trim() || null;
 
     // 2. INSERT inicial — garantiza trazabilidad ante cualquier fallo
     const insertResult = await pool.query(
@@ -407,7 +408,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
       });
     }
 
-    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic", "trading_cards"]; // figuras, cómics y cartas TCG
+    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic", "trading_cards", "die_cast_vehicle"];
     if (!SUPPORTED_FOR_PUBLISHING.includes(visionResult.item_type)) {
       const motivoTipoNoImpl = `Tipo "${visionResult.item_type}" detectado correctamente (confidence ${visionResult.type_confidence}%) pero falta implementar publicación automática para este tipo.`;
 
@@ -465,6 +466,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
         const publishFnByType = {
           "comic": mlService.publishComicAsFreeListing,
           "trading_cards": mlService.publishTradingCardAsFreeListing,
+          "die_cast_vehicle": mlService.publishDieCastAsFreeListing,
           "action_figure": mlService.publishProductAsFreeListing,
         };
         const publishFn = publishFnByType[visionResult.item_type] || mlService.publishProductAsFreeListing;
@@ -478,6 +480,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
             condition: "new",
             description: visionCommon.description,
             gtin: userGtin,
+            brand: userBrand,
           },
           images,
           visionResult
@@ -551,6 +554,42 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
             id: publicacionId,
             motivo: "PACK_REQUIRES_GTIN",
             mensaje: motivoPackGtin,
+            item_type: visionResult.item_type,
+            vision_result: visionResult,
+          });
+        }
+
+        // Caso especial: die-cast sin marca identificable y sin brand cargado por el usuario
+        if (fallbackError.message === "DIECAST_REQUIRES_BRAND") {
+          const motivoDieCastBrand =
+            `Die-cast sin marca identificable. ` +
+            `Repetí el POST agregando -F "brand=Hot Wheels" (u otra marca conocida) ` +
+            `o -F "brand=Genérica" si no tiene marca, ` +
+            `o publicalo manualmente en ML web.`;
+
+          await pool.query(
+            `UPDATE publicaciones_masivas SET 
+              titulo = $1, status = $2, condition = $3, 
+              requiere_revision = $4, motivo_revision = $5, 
+              confianza_condicion = $6, vision_result = $7
+             WHERE id = $8`,
+            [
+              visionCommon.title_suggestion,
+              "pendiente_manual",
+              "new",
+              true,
+              motivoDieCastBrand,
+              visionResult.type_confidence ?? 0,
+              visionResult,
+              publicacionId,
+            ]
+          );
+
+          return res.json({
+            status: "pendiente_manual",
+            id: publicacionId,
+            motivo: "DIECAST_REQUIRES_BRAND",
+            mensaje: motivoDieCastBrand,
             item_type: visionResult.item_type,
             vision_result: visionResult,
           });

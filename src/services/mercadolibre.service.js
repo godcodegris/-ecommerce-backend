@@ -1118,6 +1118,44 @@ export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
 
 const COMIC_CATEGORY_ID = "MLA1955"; // Revistas — bucket donde ML mete cómics
 const TRADING_CARDS_CATEGORY_ID = "MLA3390";
+const DIECAST_CATEGORY_ID = "MLA3398";
+
+// Mapping de marcas conocidas de die-cast al value_id del enum de ML.
+// Solo las más comunes en Argentina. Si Vision detecta una que no está acá,
+// caemos al fallback "Genérica".
+const DIECAST_BRAND_VALUE_IDS = {
+  "Hot Wheels": "428690",
+  "Matchbox": "428691",
+  "Maisto": "428692",
+  "Welly": "428694",
+  "Bburago": "6079335",
+  "Greenlight": "428704",
+  "Jada": "428706",
+  "Kinsmart": "428709",
+  "Majorette": "428695",
+  "Minichamps": "1047993",
+  "Norev": "1251696",
+  "Schuco": "428716",
+  "Solido": "428718",
+  "Tomica": "428720",
+  "AUTOart": "428697",
+  "Buby": "2936385",
+  "Galgo": "428702",
+  "IXO": "428693",
+  "Johnny Lightning": "428708",
+  "Revell": "5676340",
+  "Siku": "2936388",
+  "M2 Machines": "428710",
+  "Muscle Machines": "2936386",
+  "Yat Ming": "428724",
+  "Disney": "33243"
+};
+
+// Escalas válidas del enum de SCALE
+const DIECAST_VALID_SCALES = new Set([
+  "1:12", "1:16", "1:18", "1:24", "1:25", "1:28", "1:32", "1:34", "1:36",
+  "1:38", "1:43", "1:48", "1:50", "1:55", "1:60", "1:64", "1:72", "1:87"
+]);
 
 // Mapping de brand del enum de Vision al value_id del enum de ML
 const TCG_BRAND_VALUE_IDS = {
@@ -1244,6 +1282,92 @@ const buildTradingCardAttributes = (visionResult) => {
   attrs.push({ id: "SELLER_PACKAGE_WIDTH", value_name: "7 cm" });
   attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "10 cm" });
   attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "20 g" });
+
+  return attrs;
+};
+
+/**
+ * Construye los atributos de ML para un vehículo a escala (MLA3398).
+ * Required: BRAND, SCALE, VEHICLE_MODEL, VEHICLE_BRAND, IS_COLLECTIBLE,
+ * VALUE_ADDED_TAX, IMPORT_DUTY, EMPTY_GTIN_REASON.
+ */
+const buildDieCastAttributes = (visionResult) => {
+  const dc = visionResult?.die_cast_vehicle || {};
+  const userBrand = visionResult?.user_provided_brand;
+  const attrs = [];
+
+  // === BRAND (required + catalog_required) ===
+  // Prioridad: 1) Brand del usuario via POST, 2) Vision con marca conocida, 3) "Genérica" como fallback
+  let brandResolved = false;
+
+  if (userBrand && DIECAST_BRAND_VALUE_IDS[userBrand]) {
+    attrs.push({ id: "BRAND", value_id: DIECAST_BRAND_VALUE_IDS[userBrand] });
+    brandResolved = true;
+  } else if (userBrand) {
+    attrs.push({ id: "BRAND", value_name: userBrand });
+    brandResolved = true;
+  } else if (dc.manufacturer && DIECAST_BRAND_VALUE_IDS[dc.manufacturer]) {
+    attrs.push({ id: "BRAND", value_id: DIECAST_BRAND_VALUE_IDS[dc.manufacturer] });
+    brandResolved = true;
+  } else if (dc.manufacturer && !dc.is_likely_bootleg) {
+    attrs.push({ id: "BRAND", value_name: dc.manufacturer });
+    brandResolved = true;
+  } else if (dc.is_likely_bootleg || !dc.manufacturer) {
+    attrs.push({ id: "BRAND", value_name: "Genérica" });
+    brandResolved = true;
+  }
+
+  if (!brandResolved) {
+    throw new Error("DIECAST_REQUIRES_BRAND");
+  }
+
+  // === SCALE (required) ===
+  const scale = dc.scale && DIECAST_VALID_SCALES.has(dc.scale) ? dc.scale : "1:64";
+  attrs.push({ id: "SCALE", value_name: scale });
+
+  // === VEHICLE_MODEL / VEHICLE_BRAND (required) ===
+  attrs.push({ id: "VEHICLE_MODEL", value_name: dc.vehicle_model || "No especificado" });
+  attrs.push({ id: "VEHICLE_BRAND", value_name: dc.vehicle_brand || "No especificada" });
+
+  // === Hardcodes obligatorios ===
+  attrs.push({ id: "VEHICLE_TYPE", value_id: "11377043" }); // "Auto/Camioneta" (fixed)
+  attrs.push({ id: "IS_COLLECTIBLE", value_id: "242085" }); // "Sí"
+  const upp = dc.units_per_pack && dc.units_per_pack > 0 ? dc.units_per_pack : 1;
+  attrs.push({ id: "UNITS_PER_PACK", value_name: String(upp) });
+  attrs.push({ id: "SALE_FORMAT", value_id: upp > 1 ? "1359392" : "1359391" });
+
+  // === GTIN ===
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+
+  // === Fiscal (21% IVA, 0% interno) ===
+  attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" });
+  attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" });
+
+  // === Atributos opcionales útiles para SEO ===
+  if (dc.color) {
+    attrs.push({ id: "COLOR", value_name: dc.color });
+  }
+  if (visionResult?.common?.manufacturing_year) {
+    attrs.push({ id: "VEHICLE_RELEASE_YEAR", value_name: String(visionResult.common.manufacturing_year) });
+  }
+  if (visionResult?.common?.material) {
+    const materialMap = {
+      "Metal": "Metal",
+      "Plástico": "Plástico",
+      "Resina": "Resina",
+      "Madera": "Madera",
+      "die-cast": "Metal",
+      "Diecast": "Metal",
+    };
+    const mat = materialMap[visionResult.common.material];
+    if (mat) attrs.push({ id: "BODYWORK_MATERIAL", value_name: mat });
+  }
+
+  // === Dimensiones del paquete (defaults para autito en blister) ===
+  attrs.push({ id: "SELLER_PACKAGE_HEIGHT", value_name: "5 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WIDTH", value_name: "10 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "15 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "100 g" });
 
   return attrs;
 };
@@ -1556,6 +1680,164 @@ const tc = visionResult?.trading_cards || {};
     publication_type: "free_listing",
     category_id: TRADING_CARDS_CATEGORY_ID,
     item_type: "trading_cards",
+  };
+};
+
+/**
+ * Publica un vehículo a escala (die-cast) en MLA3398 como free listing.
+ */
+export const publishDieCastAsFreeListing = async (productData, images, visionResult) => {
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("publishDieCastAsFreeListing requiere al menos 1 imagen");
+  }
+
+  // Propagar brand del productData al visionResult para que buildDieCastAttributes lo use
+  if (productData?.brand) {
+    visionResult.user_provided_brand = productData.brand;
+  }
+
+  const dc = visionResult?.die_cast_vehicle || {};
+  const token = await getValidToken();
+  const visionCommon = visionResult?.common || {};
+  const uniqueId = Date.now().toString().slice(-5);
+
+  console.log(`[publishDieCastAsFreeListing] Categoría forzada: ${DIECAST_CATEGORY_ID} (Vehículos a Escala)`);
+
+  // 1. Subir fotos
+  console.log(`[publishDieCastAsFreeListing] Subiendo ${images.length} foto(s)...`);
+  const uploadResults = await Promise.allSettled(
+    images.map(img => uploadPictureToML(img.buffer, img.mimeType))
+  );
+
+  const successfulIds = [];
+  uploadResults.forEach((r, idx) => {
+    if (r.status === "fulfilled" && r.value) {
+      const id = typeof r.value === "object" ? r.value.id : r.value;
+      if (id) successfulIds.push(id);
+    } else {
+      console.error(`[publishDieCastAsFreeListing] ❌ Foto ${idx + 1} falló:`, r.reason?.message || r.reason);
+    }
+  });
+
+  if (successfulIds.length === 0) {
+    throw new Error(`Todas las ${images.length} fotos fallaron al subirse a ML`);
+  }
+
+  console.log(`[publishDieCastAsFreeListing] ✅ ${successfulIds.length}/${images.length} fotos subidas`);
+
+  // 2. Atributos (puede tirar DIECAST_REQUIRES_BRAND)
+  const attributes = buildDieCastAttributes(visionResult);
+
+  // 3. family_name único
+  const baseFamily = [
+    dc.manufacturer || visionResult?.user_provided_brand || "Auto coleccionable",
+    dc.vehicle_brand,
+    dc.vehicle_model,
+    dc.scale ? `escala ${dc.scale}` : null
+  ].filter(Boolean).join(" ");
+  const familyName = `${baseFamily} #${uniqueId}`;
+
+  console.log(`[publishDieCastAsFreeListing] family_name: "${familyName}"`);
+
+  // 4. Descripción
+  const descriptionParts = [];
+  if (visionCommon.description) {
+    descriptionParts.push(visionCommon.description);
+  } else {
+    descriptionParts.push(`Vehículo a escala coleccionable.`);
+  }
+
+  const techLines = [];
+  const brandUsed = visionResult?.user_provided_brand || dc.manufacturer;
+  if (brandUsed) techLines.push(`Marca: ${brandUsed}`);
+  if (dc.vehicle_brand) techLines.push(`Marca del vehículo: ${dc.vehicle_brand}`);
+  if (dc.vehicle_model) techLines.push(`Modelo: ${dc.vehicle_model}`);
+  if (dc.scale) techLines.push(`Escala: ${dc.scale}`);
+  if (dc.color) techLines.push(`Color: ${dc.color}`);
+  if (visionCommon.manufacturing_year) techLines.push(`Año: ${visionCommon.manufacturing_year}`);
+  if (visionCommon.material) techLines.push(`Material: ${visionCommon.material}`);
+
+  if (techLines.length > 0) {
+    descriptionParts.push("\n--- DETALLES ---\n" + techLines.join("\n"));
+  }
+
+  if (visionCommon.condition === "used" || visionCommon.condition === "damaged") {
+    descriptionParts.push(
+      "\n--- IMPORTANTE ---\nLas fotos forman parte de la descripción y reflejan el estado real. Ante cualquier duda, consultá antes de comprar."
+    );
+  }
+
+  const plainDescription = descriptionParts.join("\n");
+
+  // 5. Payload
+  const item = {
+    family_name: familyName,
+    category_id: DIECAST_CATEGORY_ID,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new",
+    pictures: successfulIds.map(id => ({ id })),
+    attributes: attributes,
+    shipping: {
+      mode: "me2",
+      local_pick_up: true,
+      free_shipping: false,
+      tags: ["self_service_in"],
+    },
+  };
+
+  console.log("[publishDieCastAsFreeListing] PAYLOAD:", JSON.stringify(item, null, 2));
+
+  // 6. Publicar
+  const response = await fetch(`${ML_BASE}/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(item),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    console.error("[publishDieCastAsFreeListing] ❌ ML rechazó:", JSON.stringify(data, null, 2));
+    throw new Error(
+      `ML rechazó publicación de die-cast: ${data.message || data.error} — ${JSON.stringify(data.cause || data)}`
+    );
+  }
+
+  console.log(`[publishDieCastAsFreeListing] ✅ Publicado: ${data.id}`);
+
+  // 7. Setear descripción aparte
+  try {
+    const descResp = await fetch(`${ML_BASE}/items/${data.id}/description`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plain_text: plainDescription }),
+    });
+
+    if (descResp.ok) {
+      console.log(`[publishDieCastAsFreeListing] ✅ Descripción seteada en ${data.id}`);
+    } else {
+      const descErr = await descResp.json();
+      console.error(`[publishDieCastAsFreeListing] ⚠️ Descripción falló:`, JSON.stringify(descErr));
+    }
+  } catch (descErr) {
+    console.error(`[publishDieCastAsFreeListing] ⚠️ Excepción seteando descripción:`, descErr.message);
+  }
+
+  return {
+    ...data,
+    publication_type: "free_listing",
+    category_id: DIECAST_CATEGORY_ID,
+    item_type: "die_cast_vehicle",
   };
 };
 // ============================================================================
