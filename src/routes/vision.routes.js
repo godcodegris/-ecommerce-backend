@@ -348,6 +348,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
     }
 
     const stock = parseInt(req.body.stock) || 1;
+    const userGtin = req.body.gtin?.trim() || null;
 
     // 2. INSERT inicial — garantiza trazabilidad ante cualquier fallo
     const insertResult = await pool.query(
@@ -519,6 +520,40 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
           vision_result: visionResult,
         });
       } catch (fallbackError) {
+        // Caso especial: pack TCG sin GTIN cargado por el usuario
+        if (fallbackError.message === "PACK_REQUIRES_GTIN") {
+          const motivoPackGtin =
+            `Pack sellado de ${visionResult.trading_cards?.brand || "TCG"} requiere GTIN (código de barras). ` +
+            `Repetí el POST agregando -F "gtin=XXXXXXXXXXXXX" con el código del pack, ` +
+            `o publicalo manualmente en ML web.`;
+
+          await pool.query(
+            `UPDATE publicaciones_masivas SET 
+              titulo = $1, status = $2, condition = $3, 
+              requiere_revision = $4, motivo_revision = $5, 
+              confianza_condicion = $6, vision_result = $7
+             WHERE id = $8`,
+            [
+              visionCommon.title_suggestion,
+              "pendiente_manual",
+              "new",
+              true,
+              motivoPackGtin,
+              visionResult.type_confidence ?? 0,
+              visionResult,
+              publicacionId,
+            ]
+          );
+
+          return res.json({
+            status: "pendiente_manual",
+            id: publicacionId,
+            motivo: "PACK_REQUIRES_GTIN",
+            mensaje: motivoPackGtin,
+            item_type: visionResult.item_type,
+            vision_result: visionResult,
+          });
+        }
         // Fallback libre también falló → queda pendiente_manual
         console.error("[publish/create] Fallback libre falló:", fallbackError.message);
 
