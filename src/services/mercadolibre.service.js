@@ -1159,8 +1159,10 @@ const buildComicAttributes = (visionResult) => {
   // UNITS_PER_PACK: por default 1
   attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
 
-  // GTIN no lo tenemos → mandamos EMPTY_GTIN_REASON
-  attrs.push({ id: "GTIN", value_name: "" });
+ // GTIN vacío + razón
+  // ML exige GTIN explícito como conditional_required para marcas conocidas (Konami, WotC).
+  // El campo es multivalued, hay que mandarlo como `values: []` (array vacío) + EMPTY_GTIN_REASON.
+  attrs.push({ id: "GTIN", values: [] });
   attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
 
   // Impuestos (igual que figuras)
