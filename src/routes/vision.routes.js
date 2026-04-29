@@ -477,6 +477,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
             stock,
             condition: "new",
             description: visionCommon.description,
+            gtin: userGtin,
           },
           images,
           visionResult
