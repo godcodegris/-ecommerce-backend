@@ -1159,11 +1159,23 @@ const buildComicAttributes = (visionResult) => {
   // UNITS_PER_PACK: por default 1
   attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
 
-const decksForGtin = tc.units_per_pack && tc.units_per_pack > 0 ? tc.units_per_pack : 1;
-  const emptyGtinReasonId = decksForGtin > 1 ? "17055159" : "17055160";
-  // GTIN como atributo presente con value_name explícitamente null
-  attrs.push({ id: "GTIN", value_id: null, value_name: null, values: [{ id: null, name: null }] });
-  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: emptyGtinReasonId });
+// GTIN: comportamiento condicional según units_per_pack y disponibilidad
+  // - Carta individual (units_per_pack === 1): mandamos EMPTY_GTIN_REASON, ML lo acepta
+  // - Pack/sobre sellado (units_per_pack > 1): ML EXIGE GTIN real (Konami, WotC, etc.)
+  //   En ese caso debe venir en visionResult.user_provided_gtin (cargado por el usuario en el POST)
+  const isPack = tc.units_per_pack && tc.units_per_pack > 1;
+  const userGtin = visionResult?.user_provided_gtin;
+
+  if (isPack && userGtin) {
+    // Pack con GTIN cargado por el usuario
+    attrs.push({ id: "GTIN", value_name: String(userGtin) });
+  } else if (isPack && !userGtin) {
+    // Pack SIN GTIN: error explícito antes de llegar a ML
+    throw new Error("PACK_REQUIRES_GTIN");
+  } else {
+    // Carta individual: EMPTY_GTIN_REASON
+    attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+  }
   // Impuestos (igual que figuras)
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
   attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" }); // "0 %"
@@ -1402,9 +1414,14 @@ export const publishTradingCardAsFreeListing = async (productData, images, visio
     throw new Error("publishTradingCardAsFreeListing requiere al menos 1 imagen");
   }
 
-  const tc = visionResult?.trading_cards || {};
+const tc = visionResult?.trading_cards || {};
   if (!tc.brand) {
     throw new Error("Trading card sin brand identificada — debería haber ido a revisión manual");
+  }
+
+  // Propagar gtin del productData al visionResult para que buildTradingCardAttributes lo use
+  if (productData?.gtin) {
+    visionResult.user_provided_gtin = productData.gtin;
   }
 
   const token = await getValidToken();
