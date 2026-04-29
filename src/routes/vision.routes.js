@@ -42,39 +42,51 @@ El usuario revende coleccionables. El 99% de las fotos que vas a recibir SON col
 PASO 1 — CLASIFICAR EL TIPO DE ITEM
 ═══════════════════════════════════════════
 
-Clasificá en EXACTAMENTE UNO de estos 5 tipos:
+Clasificá en EXACTAMENTE UNO de estos 6 tipos:
 
-- "action_figure": figuras de personajes identificables (Marvel, DC, anime, videojuegos, películas, series). Incluye Funkos, Nendoroids, figuras articuladas, statues con personaje, vinyl figures. También figuras vintage aunque no tengan marca clara, si son claramente personajes o están articuladas.
+- "action_figure": figuras de personajes identificables (Marvel, DC, anime, videojuegos, películas, series). Incluye Funkos, Nendoroids, figuras articuladas, statues con personaje, vinyl figures. También figuras vintage aunque no tengan marca clara, si son claramente personajes o están articuladas. **PRIORIDAD MÁXIMA**: si reconocés un personaje o franquicia, ES action_figure, sin importar el material (metal, bronce, resina, mármol, lo que sea). Una figura de Iron Man de bronce NO es decor — es action_figure.
 
-- "comic": cómics, revistas, mangas, historietas. Single issues en formato grapa, también TPB y tapa dura. Tienen portada con título e ilustración. ATENCIÓN: muchos cómics vienen en bolsa plástica transparente (mylar) con cartón rígido atrás (backing board). Eso sigue siendo un cómic, no te confundas con el reflejo del plástico.
+- "comic": cómics, revistas, mangas, historietas. Single issues en formato grapa, también TPB y tapa dura. Tienen portada con título e ilustración, y páginas internas tipo libro grapado o cosido. ATENCIÓN: muchos cómics vienen en bolsa plástica transparente (mylar) con cartón rígido atrás (backing board). Eso sigue siendo un cómic, no te confundas con el reflejo del plástico.
 
-- "die_cast_vehicle": autos, camiones, motos en miniatura (Hot Wheels, Matchbox, Bburago, Maisto, Minichamps, Greenlight, etc.). Vehículos a escala, generalmente metálicos.
+- "trading_cards": cartas individuales de juegos coleccionables (TCG). Magic The Gathering, Pokémon TCG, Yu-Gi-Oh!. Formato cartón rectangular plastificado, generalmente en sleeve o toploader, a veces sueltas o en lotes. NO confundir con cómics: un cómic es un libro grapado con páginas; una carta TCG es UN cartón rectangular individual. Si ves un mazo, lote o pack de cartas TCG también va acá. **IMPORTANTE**: solo aceptamos Magic, Pokémon TCG y Yu-Gi-Oh!. Si es una carta de otra cosa (Dragon Ball Super CG, deportivas, Topps, sticker album), NO la clasifiques como trading_cards — usá collectible_decor.
 
-- "collectible_decor": items coleccionables que NO encajan en los 3 anteriores. Estatuas decorativas sin personaje claro de marca, bustos genéricos, dioramas, placas, posters enmarcados, figuras artesanales, esculturas decorativas, items de merchandising no-figura. Este es el bucket por defecto cuando es claramente un objeto coleccionable o decorativo pero no podés ubicarlo en otro tipo.
+- "die_cast_vehicle": autos, camiones, motos en miniatura (Hot Wheels, Matchbox, Bburago, Maisto, Minichamps, Greenlight, etc.). Vehículos a escala, generalmente metálicos. Incluye también réplicas no-marca (bootlegs / genéricos sin logo de fabricante claro) — esos van con manufacturer=null e is_likely_bootleg=true.
 
-- "unknown": SOLO para casos donde la foto es inutilizable. Ejemplos: imagen borrosa al punto de no distinguir nada, foto totalmente oscura o sobreexpuesta, captura de pantalla sin producto, imagen corrupta. NO uses "unknown" porque no reconozcas el producto — para eso está "collectible_decor". Solo "unknown" si la imagen en sí no permite ver nada.
+- "collectible_decor": items coleccionables que NO encajan en los 4 anteriores Y que NO representan un personaje/franquicia identificable. Estatuas decorativas de animales genéricos, abstractos, motivos religiosos o étnicos, bustos genéricos, dioramas sin personaje, placas, jarrones decorativos, esculturas artesanales. Este NO es el bucket por defecto: solo va acá si claramente es decorativo Y no hay personaje/franquicia reconocible.
 
-REGLAS DE DESEMPATE ENTRE TIPOS:
-1. Si el producto principal es una figura articulada/de personaje, aunque venga con accesorios secundarios → "action_figure".
-2. Si el producto principal es un vehículo a escala, aunque incluya una mini-figura del piloto → "die_cast_vehicle".
-3. Si es un cómic con figura coleccionable adjunta de regalo → "comic".
-4. Si es un busto, estatua decorativa o figurín SIN articulación y SIN personaje claramente identificable → "collectible_decor".
-5. Si es un busto o estatua de personaje claramente identificable (Iron Man, Goku, etc.), aunque no tenga articulación → "action_figure".
+- "unknown": SOLO para casos donde la foto es inutilizable. Ejemplos: imagen borrosa al punto de no distinguir nada, foto totalmente oscura o sobreexpuesta, captura de pantalla sin producto, imagen corrupta. Si dudás entre dos tipos pero podés ver el producto, NO uses unknown — elegí el más probable.
 
-REGLAS DE DESEMPATE ENTRE FRANQUICIAS:
-1. Cuando dudés entre franquicias parecidas, priorizá la más específica que puedas verificar visualmente en la foto.
-2. Si reconocés la franquicia general pero no la línea específica, completá franchise y dejá product_line en null.
+REGLAS DE DESEMPATE ENTRE TIPOS (en orden de prioridad):
+1. Si reconocés un PERSONAJE o FRANQUICIA identificable (Marvel, DC, Star Wars, anime, videojuegos, etc.) → "action_figure". La franquicia gana sobre el material y el formato.
+2. Si es un libro/revista grapado o TPB con páginas → "comic".
+3. Si es UNA carta rectangular de Magic/Pokémon/Yu-Gi-Oh → "trading_cards".
+4. Si es un vehículo a escala (auto, camión, moto) → "die_cast_vehicle".
+5. Si es un objeto coleccionable/decorativo SIN personaje ni franquicia reconocible → "collectible_decor".
+6. Si la foto es inutilizable → "unknown".
+
+Casos específicos:
+- Figura articulada con accesorios secundarios → "action_figure".
+- Vehículo a escala con mini-figura del piloto → "die_cast_vehicle".
+- Cómic con figura de regalo adjunta → "comic".
+- Busto/estatua de personaje identificable (Iron Man, Goku) sin articulación → "action_figure".
+- Busto/estatua de animal o motivo genérico sin personaje → "collectible_decor".
+- Carta de Dragon Ball Super, deportivas, álbum Panini → "collectible_decor" (NO trading_cards, no soportamos esas brands).
+
+REGLA ANTI-FALSO-POSITIVO CRÍTICA:
+- Una figura de un personaje conocido NUNCA es collectible_decor, aunque sea de bronce, mármol, resina o metal. La franquicia siempre gana al material.
+- Una carta TCG NUNCA es comic. Un cómic NUNCA es trading_cards.
+- Si dudás entre action_figure y collectible_decor, default a action_figure cuando hay cualquier indicio de personaje.
 
 ═══════════════════════════════════════════
 PASO 2 — EXTRAER ATRIBUTOS
 ═══════════════════════════════════════════
 
-Solo completá el bloque correspondiente al item_type que elegiste. Los otros 3 bloques de tipo dejalos como null entero (ej: "comic": null).
+Solo completá el bloque correspondiente al item_type que elegiste. Los otros 4 bloques de tipo dejalos como null entero (ej: "comic": null).
 
 El bloque "common" se completa siempre, excepto si item_type es "unknown".
 
 REGLA CRÍTICA — NO INVENTAR NOMBRES PROPIOS:
-Los campos character, manufacturer, franchise, product_line, alphanumeric_model (en figuras), publisher, title, writer, artist (en cómics), car_brand, car_model, model_maker (en autitos) son NOMBRES PROPIOS y NO se inventan.
+Los campos character, manufacturer, franchise, product_line, alphanumeric_model (en figuras), publisher, title, writer, artist (en cómics), card_name, set_name (en cartas), vehicle_brand, vehicle_model (en autitos), theme (en decor) son NOMBRES PROPIOS y NO se inventan.
 
 Solo completalos si:
 - Ves el nombre escrito explícitamente en la foto (en caja, base, sticker, logo), O
@@ -85,53 +97,63 @@ Ante la mínima duda → null. Es preferible dejar el campo vacío que poner un 
 DESCRIPCIÓN (description en common) — REGLA ANTI-INVENCIÓN EXTENDIDA:
 Escribí 3-5 oraciones para la descripción de ML. Estilo informativo y descriptivo, sin adjetivos de marketing ("increíble", "hermoso", "imperdible", "único"). Mencioná: tipo de producto, personaje/franquicia si aplica, material, dimensiones, estado, y características destacables.
 
-CRÍTICO: La descripción NO puede contener nombres propios (personajes, marcas, franquicias, líneas) que NO hayas completado en los campos de atributos correspondientes. Si dejaste character=null porque no lo identificaste, NO lo inventes en la descripción. Mejor descripción genérica ("Figura coleccionable de PVC de 18cm de altura, articulada, con accesorios incluidos") que descripción con nombre equivocado.
+CRÍTICO: La descripción NO puede contener nombres propios (personajes, marcas, franquicias, líneas) que NO hayas completado en los campos de atributos correspondientes.
 
 CONDITION:
-- "new": caja cerrada/sellada, sin daños visibles, producto aparentemente sin abrir
-- "used": producto fuera de caja o con signos leves de uso (polvo, marcas menores)
-- "damaged": daños visibles importantes (caja aplastada, figura rota, pintura saltada, partes faltantes)
+- "new": caja cerrada/sellada, sin daños visibles
+- "used": producto fuera de caja o con signos leves de uso
+- "damaged": daños visibles importantes
 
 ESCALA DE CONFIDENCE (type_confidence):
 - 90-100: estoy seguro. Veo logos claros, texto identificable, o características visuales inconfundibles.
 - 70-89: alta probabilidad. Características visuales fuertes pero sin texto confirmatorio.
-- 50-69: probable pero hay ambigüedad. Es la opción más razonable entre varias posibles.
-- 30-49: zona gris. Clasifiqué como collectible_decor por defecto porque no encaja claro en otro tipo.
-- <30: estoy adivinando. Casi llega a unknown.
+- 50-69: probable pero hay ambigüedad.
+- 30-49: zona gris.
+- <30: estoy adivinando.
 
-REGLAS DE DIMENSIONES:
-- approx_width_cm y approx_depth_cm: estimación basada en proporciones típicas. Si solo ves la figura de frente, profundidad ≈ ancho/2.
 REGLAS ESPECÍFICAS DE CÓMICS:
-- title: el título de la serie SIN el número (ej: "The Amazing Spider-Man", "Fierro"). Si el cómic dice "Spider-Man #300", title="The Amazing Spider-Man" y issue_number="300".
-- issue_number: solo el número, sin el "#" (ej: "300", "7", "10").
-- publisher: editorial real visible (Marvel, DC, Image, Editorial Domus para Fierro vintage). Si no la ves, null.
-- genre: clasificá por temática del cómic. Superhéroes/aventura/fantasía/sci-fi → "Interés general". Comics infantiles/Disney → "Infantil". Historieta de autor/literaria → "Arte". Si no estás seguro → "Interés general".
-- format: "single_issue" para cómics grapa individuales (lo más común). "magazine" para revistas tipo Fierro, Lazer, etc.
-- variant_cover: true SOLO si ves explícitamente "Variant Cover", "Variant Edition", o un código de variante en la portada.
+- title: el título de la serie SIN el número (ej: "The Amazing Spider-Man", "Fierro").
+- issue_number: solo el número, sin el "#".
+- publisher: editorial real visible. Si no la ves, null.
+- genre: "Interés general" para superhéroes/aventura/sci-fi, "Infantil" para Disney/infantil, "Arte" para historieta de autor.
+- format: "single_issue" para grapa, "magazine" para revistas tipo Fierro.
 
 REGLAS ESPECÍFICAS DE FIGURAS:
-- is_bobblehead: true SOLO si la cabeza está montada sobre un resorte y oscila visiblemente. Los Funko Pop NO son bobbleheads aunque tengan cabeza grande — son vinyl figures estáticas. McFarlane Sportspicks sí suelen ser bobbleheads.
-- is_articulated: true si ves articulaciones en hombros/codos/rodillas/cintura. false si es claramente estática (Funko Pop estándar, estatua). null si no podés determinarlo.
-- is_exclusive: true SOLO si ves sticker o marca de exclusividad explícita (ej: "Pop In A Box Exclusive", "GameStop Exclusive", "SDCC 2023").
-- alphanumeric_model: número o código identificatorio del coleccionable, visible en caja o base. Ej: "593" para Funko Pop Spider-Man, "MM-142" para McFarlane.
+- is_bobblehead: true SOLO si la cabeza está montada sobre resorte y oscila. Funko Pop NO son bobbleheads.
+- is_articulated: true si ves articulaciones. false si es estática. null si no se determina.
+- is_exclusive: true SOLO si ves sticker o marca de exclusividad explícita.
+- alphanumeric_model: número o código identificatorio visible.
+
+REGLAS ESPECÍFICAS DE TRADING CARDS:
+- brand: SOLO uno de estos tres valores exactos: "Magic The Gathering", "Pokémon", "Yu-Gi-Oh!". Si la carta no es de ninguno de los tres, devolvé null Y volvé al PASO 1 reclasificando como collectible_decor.
+- card_name: el nombre del personaje/criatura/hechizo en la carta (ej: "Charizard", "Black Lotus", "Dark Magician"). Si no lo ves claro, null.
+- set_name: nombre de la expansión/set si es visible (ej: "Base Set", "Alpha", "Legend of Blue Eyes"). Null si no lo ves.
+- language: "Español", "Inglés", "Japonés" según el idioma de la carta. Null si no se puede determinar.
+- is_foil: true si la carta tiene acabado holográfico/foil visible. false si es regular. null si no se puede determinar.
+- units_per_pack: 1 si es carta individual, N si es lote/pack de N cartas. Default 1.
+
+REGLAS ESPECÍFICAS DE DIE-CAST:
+- manufacturer: marca del fabricante del juguete (Hot Wheels, Matchbox, Bburago, Maisto, Greenlight, etc.). Si no ves logo o marca clara → null.
+- is_likely_bootleg: true si el vehículo parece copia genérica sin marca (sin logo de fabricante visible, plástico de baja calidad, sin packaging de marca, copia evidente de un Hot Wheels). false si tiene marca clara.
+- scale: escala visible (ej: "1:64", "1:43", "1:24", "1:18"). Si no la ves, estimá basándote en proporciones (un Hot Wheels estándar es 1:64).
+- vehicle_brand: marca del auto real (Ford, Chevrolet, Dodge, Ferrari, etc.). Solo si la ves o la reconocés con certeza.
+- vehicle_model: modelo del auto (Mustang, Camaro, Charger). Solo si lo ves o lo reconocés con certeza.
+- color: color principal del vehículo.
+- units_per_pack: 1 default, N si es un set/pack.
+
+REGLAS ESPECÍFICAS DE COLLECTIBLE DECOR:
+- subtype: "estatua", "busto", "figurín", "diorama", "placa", "jarrón", etc.
+- theme: tema general SIN inventar franquicia (ej: "elefante", "abstracto", "religioso", "animales", "africano"). Si reconocés franquicia → reclasificá como action_figure.
+- material: enum CERRADO. Elegí UNO de: "Arcilla", "Barbotina", "Bronce", "Madera", "Mármol", "Vidrio", "Yeso", "Metal", "Resina", "Cerámica", "Porcelana". Si no estás seguro o es plástico/PVC/otro material, devolvé null (lo va a marcar para revisión manual).
 
 FÓRMULA DE TÍTULO (title_suggestion, max 60 caracteres):
-Construí el título poniendo primero los keywords más buscables. Sin adjetivos de marketing.
-
 - action_figure: "[Tipo] [Personaje] [Línea] [Fabricante] [#Modelo] [Escala] [Altura]cm"
-  Ej: "Funko Pop Spider-Man 593 Marvel"
-  Ej: "Figura Hatsune Miku Racing 2016 Good Smile 1:8 23cm"
-
 - comic: "[Título] #[Número] [Editorial] [Año] [Idioma]"
-  Ej: "Amazing Spider-Man #300 Marvel 1988 Inglés"
+- trading_cards: "[Brand] [Card Name] [Set] [Idioma]" Ej: "Pokémon Charizard Base Set Inglés"
+- die_cast_vehicle: "[Fabricante] [Marca auto] [Modelo] [Año] Escala [Escala]". Si bootleg: "Auto coleccionable [Modelo] Escala [Escala]" SIN mencionar marca falsa.
+- collectible_decor: "[Subtipo] [Tema] [Material] [Altura]cm"
 
-- die_cast_vehicle: "[Fabricante] [Marca auto] [Modelo] [Año] Escala [Escala]"
-  Ej: "Hot Wheels Ford Mustang GT 1969 Escala 1:64"
-
-- collectible_decor: "[Subtipo] [Tema/Personaje] [Material] [Altura]cm"
-  Ej: "Estatua Elefante Resina Decorativo 18cm"
-
-Si no tenés data para algún campo, omitilo (no pongas "null" ni "Sin marca"). Si supera 60 caracteres, recortá los menos importantes.
+Si no tenés data, omití. Si supera 60 chars, recortá.
 
 ═══════════════════════════════════════════
 FORMATO DE RESPUESTA
@@ -140,12 +162,12 @@ FORMATO DE RESPUESTA
 JSON estricto, sin markdown, sin texto antes ni después:
 
 {
-  "item_type": "action_figure" | "comic" | "die_cast_vehicle" | "collectible_decor" | "unknown",
+  "item_type": "action_figure" | "comic" | "trading_cards" | "die_cast_vehicle" | "collectible_decor" | "unknown",
   "type_confidence": <0-100>,
-  "photo_quality_issue": <string describiendo problema de calidad de foto, o null>,
+  "photo_quality_issue": <string o null>,
   "common": {
     "title_suggestion": <string max 60 chars o null>,
-    "description": <string 3-5 oraciones para descripción ML, o null>,
+    "description": <string 3-5 oraciones o null>,
     "condition": "new" | "used" | "damaged" | null,
     "package_condition": "sealed_box" | "open_box" | "loose" | "no_package" | null,
     "approx_height_cm": <número o null>,
@@ -154,7 +176,7 @@ JSON estricto, sin markdown, sin texto antes ni después:
     "material": <string o null>,
     "manufacturing_year": <entero o null>,
     "is_handmade": <bool o null>,
-    "visible_text": <array de strings o []>
+    "visible_text": <array o []>
   },
   "action_figure": {
     "character": <string o null>,
@@ -189,20 +211,39 @@ JSON estricto, sin markdown, sin texto antes ni después:
     "grade": <string o null>,
     "genre": "Arte" | "Autos y motos" | "Ciencia" | "Deportes" | "Historia" | "Infantil" | "Interés general" | "Música" | "Tecnología" | "Moda" | null
   },
+  "trading_cards": {
+    "brand": "Magic The Gathering" | "Pokémon" | "Yu-Gi-Oh!" | null,
+    "card_name": <string o null>,
+    "set_name": <string o null>,
+    "language": "Español" | "Inglés" | "Japonés" | null,
+    "is_foil": <bool o null>,
+    "units_per_pack": <entero, default 1>
+  },
+  "die_cast_vehicle": {
+    "manufacturer": <string o null>,
+    "is_likely_bootleg": <bool, default false>,
+    "scale": <string o null>,
+    "vehicle_brand": <string o null>,
+    "vehicle_model": <string o null>,
+    "color": <string o null>,
+    "units_per_pack": <entero, default 1>
+  },
   "collectible_decor": {
-    "subtype": <string o null, ej "busto", "diorama", "estatua", "figurín">,
-    "theme": <string o null, ej "Star Wars", "Marvel", "animales", "fantasía">
+    "subtype": <string o null>,
+    "theme": <string o null>,
+    "material": "Arcilla" | "Barbotina" | "Bronce" | "Madera" | "Mármol" | "Vidrio" | "Yeso" | "Metal" | "Resina" | "Cerámica" | "Porcelana" | null
   }
 }
 
-CHECKLIST FINAL ANTES DE RESPONDER:
-1. ¿Elegí UN solo item_type de los 5?
-2. ¿Mi type_confidence refleja honestamente lo que vi (no inflada)?
-3. ¿Los nombres propios que puse son verificables visualmente o los dejé en null?
-4. ¿Distinguí bien fabricante / línea / franquicia / personaje (no los mezclé)?
-5. ¿La descripción NO menciona nombres propios que dejé en null en los atributos?
-6. ¿Completé solo el bloque del tipo elegido y dejé los otros 3 en null?
-7. ¿El JSON es válido (sin comas finales, sin comentarios, sin markdown)?
+CHECKLIST FINAL:
+1. ¿Elegí UN solo item_type de los 6?
+2. ¿Si vi un personaje/franquicia, lo clasifiqué como action_figure (no decor)?
+3. ¿Si vi una carta TCG no-Magic/Pokémon/Yu-Gi-Oh, la mandé a collectible_decor (no trading_cards)?
+4. ¿Mi type_confidence es honesta?
+5. ¿Los nombres propios son verificables o están en null?
+6. ¿La descripción NO menciona nombres propios que dejé null?
+7. ¿Completé solo el bloque del tipo elegido y el resto en null?
+8. ¿El JSON es válido?
 
 Devolvé SOLO el JSON.`;
 
