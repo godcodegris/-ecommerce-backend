@@ -1159,23 +1159,8 @@ const buildComicAttributes = (visionResult) => {
   // UNITS_PER_PACK: por default 1
   attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
 
-// GTIN: comportamiento condicional según units_per_pack y disponibilidad
-  // - Carta individual (units_per_pack === 1): mandamos EMPTY_GTIN_REASON, ML lo acepta
-  // - Pack/sobre sellado (units_per_pack > 1): ML EXIGE GTIN real (Konami, WotC, etc.)
-  //   En ese caso debe venir en visionResult.user_provided_gtin (cargado por el usuario en el POST)
-  const isPack = tc.units_per_pack && tc.units_per_pack > 1;
-  const userGtin = visionResult?.user_provided_gtin;
-
-  if (isPack && userGtin) {
-    // Pack con GTIN cargado por el usuario
-    attrs.push({ id: "GTIN", value_name: String(userGtin) });
-  } else if (isPack && !userGtin) {
-    // Pack SIN GTIN: error explícito antes de llegar a ML
-    throw new Error("PACK_REQUIRES_GTIN");
-  } else {
-    // Carta individual: EMPTY_GTIN_REASON
-    attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
-  }
+// GTIN no lo tenemos → mandamos EMPTY_GTIN_REASON
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" }); // "no tiene código registrado"
   // Impuestos (igual que figuras)
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
   attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" }); // "0 %"
@@ -1229,8 +1214,20 @@ const buildTradingCardAttributes = (visionResult) => {
   const decks = tc.units_per_pack && tc.units_per_pack > 0 ? tc.units_per_pack : 1;
   attrs.push({ id: "CARD_DECKS_NUMBER", value_name: String(decks) });
 
-  // GTIN vacío + razón
-  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+  // GTIN: comportamiento condicional según units_per_pack
+  // - Carta individual (units_per_pack === 1): EMPTY_GTIN_REASON, ML lo acepta
+  // - Pack/sobre sellado (units_per_pack > 1): ML EXIGE GTIN real (Konami, WotC, etc.)
+  //   Debe venir en visionResult.user_provided_gtin (cargado por el usuario en el POST)
+  const isPack = tc.units_per_pack && tc.units_per_pack > 1;
+  const userGtin = visionResult?.user_provided_gtin;
+
+  if (isPack && userGtin) {
+    attrs.push({ id: "GTIN", value_name: String(userGtin) });
+  } else if (isPack && !userGtin) {
+    throw new Error("PACK_REQUIRES_GTIN");
+  } else {
+    attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+  }
 
   // Fiscal monotributo / exento
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "55043032" }); // "Exento"
