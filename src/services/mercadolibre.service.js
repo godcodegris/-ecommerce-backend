@@ -1159,12 +1159,14 @@ const buildComicAttributes = (visionResult) => {
   // UNITS_PER_PACK: por default 1
   attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
 
- // GTIN vacío + razón
-  // ML exige GTIN explícito como conditional_required para marcas conocidas (Konami, WotC).
-  // El campo es multivalued, hay que mandarlo como `values: []` (array vacío) + EMPTY_GTIN_REASON.
-  attrs.push({ id: "GTIN", values: [] });
-  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
-
+// GTIN vacío + razón
+  // Si units_per_pack > 1, es un pack/kit → EMPTY_GTIN_REASON "kit o pack" (17055159).
+  // Si es carta individual → "no tiene código registrado" (17055160).
+  // Algunos casos requieren mandar GTIN explícito como string. Probamos primero con multivalued.
+  const decksForGtin = tc.units_per_pack && tc.units_per_pack > 0 ? tc.units_per_pack : 1;
+  const emptyGtinReasonId = decksForGtin > 1 ? "17055159" : "17055160";
+  attrs.push({ id: "GTIN", value_name: "0" });
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: emptyGtinReasonId });
   // Impuestos (igual que figuras)
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
   attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" }); // "0 %"
