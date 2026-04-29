@@ -406,7 +406,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
       });
     }
 
-    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic"]; // figuras y cómics
+    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic", "trading_cards"]; // figuras, cómics y cartas TCG
     if (!SUPPORTED_FOR_PUBLISHING.includes(visionResult.item_type)) {
       const motivoTipoNoImpl = `Tipo "${visionResult.item_type}" detectado correctamente (confidence ${visionResult.type_confidence}%) pero falta implementar publicación automática para este tipo.`;
 
@@ -460,9 +460,14 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
 
       try {
            // Routing por item_type: cada tipo tiene su propia función de publicación
-        const publishFn = visionResult.item_type === "comic"
-          ? mlService.publishComicAsFreeListing
-          : mlService.publishProductAsFreeListing;
+        // Routing por item_type: cada tipo tiene su propia función de publicación
+        const publishFnByType = {
+          "comic": mlService.publishComicAsFreeListing,
+          "trading_cards": mlService.publishTradingCardAsFreeListing,
+          "action_figure": mlService.publishProductAsFreeListing,
+        };
+        const publishFn = publishFnByType[visionResult.item_type] || mlService.publishProductAsFreeListing;
+        console.log(`[publish/create] Routing item_type="${visionResult.item_type}" → ${publishFn.name}`);
 
         const freeListingResponse = await publishFn(
           {

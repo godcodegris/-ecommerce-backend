@@ -1117,7 +1117,14 @@ export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
 // ============================================================================
 
 const COMIC_CATEGORY_ID = "MLA1955"; // Revistas — bucket donde ML mete cómics
+const TRADING_CARDS_CATEGORY_ID = "MLA3390";
 
+// Mapping de brand del enum de Vision al value_id del enum de ML
+const TCG_BRAND_VALUE_IDS = {
+  "Magic The Gathering": "15877174",
+  "Pokémon": null,        // ML acepta "Pokémon" como string libre, sin value_id forzado
+  "Yu-Gi-Oh!": null
+};
 /**
  * Construye el array de atributos para publicar un cómic en MLA1955.
  * Combina valores detectados por Vision + hardcodes para campos fijos.
@@ -1183,6 +1190,49 @@ const buildComicAttributes = (visionResult) => {
   attrs.push({ id: "SELLER_PACKAGE_WIDTH", value_name: "17 cm" });
   attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "26 cm" });
   attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "150 g" });
+
+  return attrs;
+};
+/**
+ * Construye los atributos de ML para una carta TCG (MLA3390).
+ * Atributos requeridos: BRAND, CARD_DECKS_NUMBER, GTIN, EMPTY_GTIN_REASON,
+ * VALUE_ADDED_TAX, IMPORT_DUTY.
+ */
+const buildTradingCardAttributes = (visionResult) => {
+  const tc = visionResult?.trading_cards || {};
+  const attrs = [];
+
+  // BRAND — required
+  if (tc.brand) {
+    const brandAttr = { id: "BRAND", value_name: tc.brand };
+    if (TCG_BRAND_VALUE_IDS[tc.brand]) {
+      brandAttr.value_id = TCG_BRAND_VALUE_IDS[tc.brand];
+    }
+    attrs.push(brandAttr);
+  }
+
+  // CARD_DECKS_NUMBER — default 1, override si lote
+  const decks = tc.units_per_pack && tc.units_per_pack > 0 ? tc.units_per_pack : 1;
+  attrs.push({ id: "CARD_DECKS_NUMBER", value_name: String(decks) });
+
+  // GTIN vacío + razón
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
+
+  // Fiscal monotributo / exento
+  attrs.push({ id: "VALUE_ADDED_TAX", value_id: "55043032" }); // "Exento"
+  attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" });     // "0 %"
+
+  // Opcionales
+  if (tc.language) attrs.push({ id: "LANGUAGE", value_name: tc.language });
+  if (tc.is_foil === true) attrs.push({ id: "IS_FOIL_CARD", value_name: "Sí" });
+  else if (tc.is_foil === false) attrs.push({ id: "IS_FOIL_CARD", value_name: "No" });
+  if (tc.card_name) attrs.push({ id: "TRADING_CARD_NAME", value_name: tc.card_name });
+
+  // Dimensiones de paquete (defaults para carta TCG individual)
+  attrs.push({ id: "SELLER_PACKAGE_HEIGHT", value_name: "1 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WIDTH", value_name: "7 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "10 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "20 g" });
 
   return attrs;
 };
@@ -1342,7 +1392,156 @@ export const publishComicAsFreeListing = async (productData, images, visionResul
     item_type: "comic",
   };
 };
+/**
+ * Publica una carta TCG como free listing en MLA3390.
+ */
+export const publishTradingCardAsFreeListing = async (productData, images, visionResult) => {
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("publishTradingCardAsFreeListing requiere al menos 1 imagen");
+  }
 
+  const tc = visionResult?.trading_cards || {};
+  if (!tc.brand) {
+    throw new Error("Trading card sin brand identificada — debería haber ido a revisión manual");
+  }
+
+  const token = await getValidToken();
+  const visionCommon = visionResult?.common || {};
+  const uniqueId = Date.now().toString().slice(-5);
+
+  console.log(`[publishTradingCardAsFreeListing] Categoría forzada: ${TRADING_CARDS_CATEGORY_ID} (Cartas TCG)`);
+
+  // 1. Subir fotos
+  console.log(`[publishTradingCardAsFreeListing] Subiendo ${images.length} foto(s)...`);
+  const uploadResults = await Promise.allSettled(
+    images.map(img => uploadPictureToML(img.buffer, img.mimeType))
+  );
+
+  const successfulIds = [];
+  uploadResults.forEach((r, idx) => {
+    if (r.status === "fulfilled" && r.value) {
+      const id = typeof r.value === "object" ? r.value.id : r.value;
+      if (id) successfulIds.push(id);
+    } else {
+      console.error(`[publishTradingCardAsFreeListing] ❌ Foto ${idx + 1} falló:`, r.reason?.message || r.reason);
+    }
+  });
+
+  if (successfulIds.length === 0) {
+    throw new Error(`Todas las ${images.length} fotos fallaron al subirse a ML`);
+  }
+
+  console.log(`[publishTradingCardAsFreeListing] ✅ ${successfulIds.length}/${images.length} fotos subidas`);
+
+  // 2. Atributos
+  const attributes = buildTradingCardAttributes(visionResult);
+
+  // 3. family_name único
+  const baseFamily = `${tc.brand} ${tc.card_name || "Carta TCG"}`;
+  const setBit = tc.set_name ? ` ${tc.set_name}` : "";
+  const familyName = `${baseFamily}${setBit} #${uniqueId}`;
+
+  console.log(`[publishTradingCardAsFreeListing] family_name: "${familyName}"`);
+
+  // 4. Descripción
+  const descriptionParts = [];
+  if (visionCommon.description) {
+    descriptionParts.push(visionCommon.description);
+  } else {
+    descriptionParts.push(`Carta coleccionable de ${tc.brand}.`);
+  }
+
+  const techLines = [];
+  if (tc.brand) techLines.push(`Marca: ${tc.brand}`);
+  if (tc.card_name) techLines.push(`Carta: ${tc.card_name}`);
+  if (tc.set_name) techLines.push(`Set/Expansión: ${tc.set_name}`);
+  if (tc.language) techLines.push(`Idioma: ${tc.language}`);
+  if (tc.is_foil === true) techLines.push(`Foil: Sí`);
+  if (tc.units_per_pack && tc.units_per_pack > 1) techLines.push(`Cantidad: ${tc.units_per_pack} cartas`);
+
+  if (techLines.length > 0) {
+    descriptionParts.push("\n--- DETALLES ---\n" + techLines.join("\n"));
+  }
+
+  if (visionCommon.condition === "used" || visionCommon.condition === "damaged") {
+    descriptionParts.push(
+      "\n--- IMPORTANTE ---\nLas fotos forman parte de la descripción y reflejan el estado real. Ante cualquier duda, consultá antes de comprar."
+    );
+  }
+
+  const plainDescription = descriptionParts.join("\n");
+
+  // 5. Payload
+  const item = {
+    family_name: familyName,
+    category_id: TRADING_CARDS_CATEGORY_ID,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new",
+    pictures: successfulIds.map(id => ({ id })),
+    attributes: attributes,
+    shipping: {
+      mode: "me2",
+      local_pick_up: true,
+      free_shipping: false,
+      tags: ["self_service_in"],
+    },
+  };
+
+  console.log("[publishTradingCardAsFreeListing] PAYLOAD:", JSON.stringify(item, null, 2));
+
+  // 6. Publicar
+  const response = await fetch(`${ML_BASE}/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(item),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || data.error) {
+    console.error("[publishTradingCardAsFreeListing] ❌ ML rechazó:", JSON.stringify(data, null, 2));
+    throw new Error(
+      `ML rechazó publicación de carta TCG: ${data.message || data.error} — ${JSON.stringify(data.cause || data)}`
+    );
+  }
+
+  console.log(`[publishTradingCardAsFreeListing] ✅ Publicado: ${data.id}`);
+
+  // 7. Setear descripción aparte
+  try {
+    const descResp = await fetch(`${ML_BASE}/items/${data.id}/description`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plain_text: plainDescription }),
+    });
+
+    if (descResp.ok) {
+      console.log(`[publishTradingCardAsFreeListing] ✅ Descripción seteada en ${data.id}`);
+    } else {
+      const descErr = await descResp.json();
+      console.error(`[publishTradingCardAsFreeListing] ⚠️ Descripción falló:`, JSON.stringify(descErr));
+    }
+  } catch (descErr) {
+    console.error(`[publishTradingCardAsFreeListing] ⚠️ Excepción seteando descripción:`, descErr.message);
+  }
+
+  return {
+    ...data,
+    publication_type: "free_listing",
+    category_id: TRADING_CARDS_CATEGORY_ID,
+    item_type: "trading_cards",
+  };
+};
 // ============================================================================
 // DEBUG / UTILITY: Descubrimiento de categorías y atributos de ML
 // Se usa para descubrir category_id y atributos requeridos antes de
