@@ -324,6 +324,74 @@ router.post("/analyze", upload.single("image"), async (req, res) => {
   }
 });
 
+// ============================================================================
+// Red de seguridad anti-alucinación de Vision
+// Si Vision dice "es Venom" pero describe un elefante, reclasifica a decor.
+// ============================================================================
+const sanitizeHallucinatedCharacter = (visionResult) => {
+  if (visionResult?.item_type !== "action_figure") return visionResult;
+
+  const af = visionResult.action_figure || {};
+  const common = visionResult.common || {};
+  const claimedCharacter = af.character;
+
+  if (!claimedCharacter) return visionResult;
+
+  const description = (common.description || "").toLowerCase();
+  const characterLc = claimedCharacter.toLowerCase();
+  const characterMentionedInDescription = description.includes(characterLc);
+
+  const NON_HUMANOID_SUBJECTS = [
+    "elefante", "elefantes",
+    "gorila", "gorilas", "mono", "simio",
+    "tigre", "tigres", "leon", "león", "leona", "leones",
+    "caballo", "caballos", "yegua",
+    "aguila", "águila", "lechuza", "buho", "búho",
+    "perro", "perros", "gato", "gatos", "lobo", "lobos",
+    "toro", "toros", "vaca", "ciervo", "venado",
+    "dragon", "dragón",
+    "pajaro", "pájaro", "ave",
+    "buda", "virgen", "santo", "cristo", "jesus", "jesús",
+    "abstracto", "abstracta",
+  ];
+
+  const matchedSubject = NON_HUMANOID_SUBJECTS.find(word => description.includes(word));
+
+  if (matchedSubject && !characterMentionedInDescription) {
+    console.warn(
+      `[sanitizeHallucinatedCharacter] ⚠️ Override: character="${claimedCharacter}" ` +
+      `pero description menciona "${matchedSubject}". Reclasificando a collectible_decor.`
+    );
+
+    const subjectCap = matchedSubject.charAt(0).toUpperCase() + matchedSubject.slice(1);
+    const titleParts = ["Estatua", subjectCap];
+    if (common.material) titleParts.push(common.material);
+    if (common.approx_height_cm) titleParts.push(`${common.approx_height_cm}cm`);
+    const newTitle = titleParts.join(" ").substring(0, 60);
+
+    return {
+      ...visionResult,
+      item_type: "collectible_decor",
+      type_confidence: Math.min(visionResult.type_confidence ?? 0, 50),
+      action_figure: null,
+      collectible_decor: {
+        subtype: "estatua",
+        theme: matchedSubject,
+        material: common.material || null,
+      },
+      common: {
+        ...common,
+        title_suggestion: newTitle,
+      },
+      was_overridden: true,
+      _original_character: claimedCharacter,
+      _override_reason: `Description menciona "${matchedSubject}" pero character="${claimedCharacter}" no aparece.`,
+    };
+  }
+
+  return visionResult;
+};
+
 // ===== Orquestador end-to-end: 3 fotos -> Vision -> publicar en ML + DB =====
 router.post("/create", upload.array("images", 3), async (req, res) => {
   let publicacionId = null;
@@ -361,10 +429,22 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
     publicacionId = insertResult.rows[0].id;
     console.log(`[publish/create] Registro inicial creado: id=${publicacionId}`);
 
+    
     // 3. Analizar imagen con Vision (solo la primera foto)
     console.log("[publish/create] Iniciando análisis con Vision...");
-    const visionResult = await analyzeImageWithVision(primaryImage.buffer, primaryImage.mimeType);
+    const rawVisionResult = await analyzeImageWithVision(primaryImage.buffer, primaryImage.mimeType);
 
+    // 3.a. Red de seguridad anti-alucinación
+    const visionResult = sanitizeHallucinatedCharacter(rawVisionResult);
+    if (visionResult.was_overridden) {
+      console.warn(
+        `[publish/create] 🛡️ Anti-alucinación activada. ` +
+        `Original: action_figure/${visionResult._original_character} → collectible_decor. ` +
+        `Razón: ${visionResult._override_reason}`
+      );
+    }
+
+    
     // Aliases por bloque del schema (estilo opción B, consistente en todo el proyecto)
     const visionCommon = visionResult.common || {};
     const visionAF = visionResult.action_figure || {};
