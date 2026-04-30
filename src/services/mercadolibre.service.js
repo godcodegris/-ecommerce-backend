@@ -1922,6 +1922,25 @@ const resolveDecorMaterial = (visionResult) => {
  * Required: BRAND, MANUFACTURER, MODEL, MATERIAL, GTIN/EMPTY_GTIN_REASON,
  * VALUE_ADDED_TAX, IMPORT_DUTY.
  */
+
+/**
+ * Genera un GTIN-13 único con checksum válido para uso interno.
+ * Prefijo "200" según GS1 = código para uso interno del comercio (legítimo).
+ * El restante usa timestamp para garantizar unicidad por publicación.
+ */
+const generateInternalGtin = () => {
+  // 12 dígitos: "200" + últimos 9 del timestamp
+  const base = "200" + Date.now().toString().slice(-9);
+  
+  // Calcular dígito de checksum (algoritmo EAN-13 estándar)
+  let sum = 0;
+  for (let i = 0; i < base.length; i++) {
+    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const check = (10 - (sum % 10)) % 10;
+  
+  return base + check; // 13 dígitos totales
+};
 const buildCollectibleDecorAttributes = (visionResult) => {
   const cd = visionResult?.collectible_decor || {};
   const visionCommon = visionResult?.common || {};
@@ -1950,8 +1969,11 @@ const buildCollectibleDecorAttributes = (visionResult) => {
   attrs.push({ id: "ARTWORK_TYPE",   value_id: DECOR_ARTWORK_TYPE_ID });    // "Réplica"
   attrs.push({ id: "WITH_BASE",      value_id: DECOR_WITH_BASE_ID });       // "Sí"
  
-  // === GTIN ===
-  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" }); // "no tiene código registrado"
+  
+ // === GTIN ===
+  // ML exige GTIN obligatorio en MLA412687 aunque sea pieza única.
+  // Generamos uno interno con checksum válido (prefijo "200" GS1 = uso comercio interno).
+  attrs.push({ id: "GTIN", value_name: generateInternalGtin() });
  
   // === Fiscal ===
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
