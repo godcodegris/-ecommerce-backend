@@ -350,6 +350,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
     const stock = parseInt(req.body.stock) || 1;
     const userGtin = req.body.gtin?.trim() || null;
     const userBrand = req.body.brand?.trim() || null;
+    const userMaterial = req.body.material?.trim() || null; 
 
     // 2. INSERT inicial — garantiza trazabilidad ante cualquier fallo
     const insertResult = await pool.query(
@@ -408,7 +409,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
       });
     }
 
-    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic", "trading_cards", "die_cast_vehicle"];
+    const SUPPORTED_FOR_PUBLISHING = ["action_figure", "comic", "trading_cards", "die_cast_vehicle", "collectible_decor"];
     if (!SUPPORTED_FOR_PUBLISHING.includes(visionResult.item_type)) {
       const motivoTipoNoImpl = `Tipo "${visionResult.item_type}" detectado correctamente (confidence ${visionResult.type_confidence}%) pero falta implementar publicación automática para este tipo.`;
 
@@ -464,11 +465,13 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
            // Routing por item_type: cada tipo tiene su propia función de publicación
         // Routing por item_type: cada tipo tiene su propia función de publicación
         const publishFnByType = {
-          "comic": mlService.publishComicAsFreeListing,
-          "trading_cards": mlService.publishTradingCardAsFreeListing,
-          "die_cast_vehicle": mlService.publishDieCastAsFreeListing,
-          "action_figure": mlService.publishProductAsFreeListing,
-        };
+  "comic": mlService.publishComicAsFreeListing,
+  "trading_cards": mlService.publishTradingCardAsFreeListing,
+  "die_cast_vehicle": mlService.publishDieCastAsFreeListing,
+  "collectible_decor": mlService.publishCollectibleDecorAsFreeListing,
+  "action_figure": mlService.publishProductAsFreeListing,
+};
+       
         const publishFn = publishFnByType[visionResult.item_type] || mlService.publishProductAsFreeListing;
         console.log(`[publish/create] Routing item_type="${visionResult.item_type}" → ${publishFn.name}`);
 
@@ -481,6 +484,7 @@ router.post("/create", upload.array("images", 3), async (req, res) => {
             description: visionCommon.description,
             gtin: userGtin,
             brand: userBrand,
+            material: userMaterial, 
           },
           images,
           visionResult

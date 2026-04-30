@@ -1840,6 +1840,298 @@ export const publishDieCastAsFreeListing = async (productData, images, visionRes
     item_type: "die_cast_vehicle",
   };
 };
+
+// ============================================================================
+// PUBLICACIÓN DE COLLECTIBLE DECOR — flujo dedicado para item_type="collectible_decor"
+// Categoría hardcodeada: MLA412687 (Estatuas).
+// Es el "cajón de descarte": cae acá lo que NO es action_figure, comic,
+// trading_cards ni die_cast_vehicle.
+// ============================================================================
+ 
+const COLLECTIBLE_DECOR_CATEGORY_ID = "MLA412687";
+ 
+// Mapeo del enum de Vision (más amplio) al enum cerrado de ML.
+// El SYSTEM_PROMPT permite: Arcilla, Barbotina, Bronce, Madera, Mármol, Vidrio,
+// Yeso, Metal, Resina, Cerámica, Porcelana.
+// ML solo acepta los primeros 7. Mapeamos los 4 restantes al más cercano.
+const DECOR_MATERIAL_VALUE_IDS = {
+  "Arcilla":   "2489118",
+  "Barbotina": "2489115",
+  "Bronce":    "4180051",
+  "Madera":    "2431881",
+  "Mármol":    "1210896",
+  "Vidrio":    "2431731",
+  "Yeso":      "2489114",
+};
+ 
+// Materiales del enum de Vision que NO existen en ML → mapeo al más cercano
+const DECOR_MATERIAL_FALLBACK_MAP = {
+  "Metal":     "Bronce",   // metal genérico → Bronce (es metálico)
+  "Resina":    "Yeso",     // resina → Yeso (ambos moldeados, look similar)
+  "Cerámica":  "Arcilla",  // cerámica → Arcilla
+  "Porcelana": "Barbotina",// porcelana → Barbotina
+};
+ 
+// Hardcodes del enum de MLA412687 (capturados del debug)
+const DECOR_SCULPTURE_TYPE_ID = "2489103";   // "Estatua"
+const DECOR_ARTWORK_TYPE_ID   = "2489102";   // "Réplica"
+const DECOR_WITH_BASE_ID      = "242085";    // "Sí"
+ 
+/**
+ * Resuelve el material a usar en el atributo MATERIAL.
+ * Prioridad:
+ *   1. user_provided_material (override por POST)
+ *   2. visionResult.collectible_decor.material (si está en enum directo de ML)
+ *   3. Mapeo de fallback (Metal→Bronce, Resina→Yeso, etc.)
+ *   4. Default duro: "Yeso" (el más neutro)
+ *
+ * Devuelve { name, value_id } o null si no se puede resolver.
+ */
+const resolveDecorMaterial = (visionResult) => {
+  const userMaterial = visionResult?.user_provided_material;
+  const visionMaterial = visionResult?.collectible_decor?.material;
+ 
+  const tryMatch = (raw) => {
+    if (!raw) return null;
+    // 1. ¿Está directo en el enum de ML?
+    if (DECOR_MATERIAL_VALUE_IDS[raw]) {
+      return { name: raw, value_id: DECOR_MATERIAL_VALUE_IDS[raw] };
+    }
+    // 2. ¿Está en el mapeo de fallback?
+    const mapped = DECOR_MATERIAL_FALLBACK_MAP[raw];
+    if (mapped && DECOR_MATERIAL_VALUE_IDS[mapped]) {
+      return { name: mapped, value_id: DECOR_MATERIAL_VALUE_IDS[mapped] };
+    }
+    return null;
+  };
+ 
+  // Override del usuario primero
+  const fromUser = tryMatch(userMaterial);
+  if (fromUser) return fromUser;
+ 
+  // Vision después
+  const fromVision = tryMatch(visionMaterial);
+  if (fromVision) return fromVision;
+ 
+  // Default duro: Yeso
+  return { name: "Yeso", value_id: DECOR_MATERIAL_VALUE_IDS["Yeso"] };
+};
+ 
+/**
+ * Construye los atributos de ML para una pieza decorativa coleccionable (MLA412687).
+ * Required: BRAND, MANUFACTURER, MODEL, MATERIAL, GTIN/EMPTY_GTIN_REASON,
+ * VALUE_ADDED_TAX, IMPORT_DUTY.
+ */
+const buildCollectibleDecorAttributes = (visionResult) => {
+  const cd = visionResult?.collectible_decor || {};
+  const visionCommon = visionResult?.common || {};
+  const attrs = [];
+ 
+  // === BRAND (required, texto libre — hint permite "Genérica") ===
+  attrs.push({ id: "BRAND", value_name: "Genérica" });
+ 
+  // === MANUFACTURER (catalog_required, texto libre) ===
+  attrs.push({ id: "MANUFACTURER", value_name: "Genérica" });
+ 
+  // === MODEL (catalog_required, texto libre) ===
+  // Usamos el title_suggestion de Vision o fallback genérico
+  const modelValue =
+    visionCommon.title_suggestion ||
+    cd.theme ||
+    "Pieza coleccionable";
+  attrs.push({ id: "MODEL", value_name: modelValue });
+ 
+  // === MATERIAL (REQUIRED — enum cerrado) ===
+  const material = resolveDecorMaterial(visionResult);
+  attrs.push({ id: "MATERIAL", value_id: material.value_id });
+ 
+  // === Hardcodes seguros ===
+  attrs.push({ id: "SCULPTURE_TYPE", value_id: DECOR_SCULPTURE_TYPE_ID });  // "Estatua"
+  attrs.push({ id: "ARTWORK_TYPE",   value_id: DECOR_ARTWORK_TYPE_ID });    // "Réplica"
+  attrs.push({ id: "WITH_BASE",      value_id: DECOR_WITH_BASE_ID });       // "Sí"
+ 
+  // === GTIN ===
+  attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" }); // "no tiene código registrado"
+ 
+  // === Fiscal ===
+  attrs.push({ id: "VALUE_ADDED_TAX", value_id: "48405909" }); // "21 %"
+  attrs.push({ id: "IMPORT_DUTY",     value_id: "49553239" }); // "0 %"
+ 
+  // === Atributos opcionales útiles para SEO ===
+  if (visionCommon.approx_height_cm) {
+    attrs.push({ id: "HEIGHT", value_name: `${visionCommon.approx_height_cm} cm` });
+  }
+  if (visionCommon.approx_width_cm) {
+    attrs.push({ id: "WIDTH", value_name: `${visionCommon.approx_width_cm} cm` });
+  }
+  if (visionCommon.approx_depth_cm) {
+    attrs.push({ id: "LENGTH", value_name: `${visionCommon.approx_depth_cm} cm` });
+  }
+ 
+  // === Dimensiones del paquete (defaults para una estatua/busto promedio ~20cm) ===
+  attrs.push({ id: "SELLER_PACKAGE_HEIGHT", value_name: "25 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WIDTH",  value_name: "20 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "20 cm" });
+  attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "1500 g" });
+ 
+  return attrs;
+};
+ 
+/**
+ * Publica una pieza decorativa coleccionable en MLA412687 como free listing.
+ */
+export const publishCollectibleDecorAsFreeListing = async (productData, images, visionResult) => {
+  if (!Array.isArray(images) || images.length === 0) {
+    throw new Error("publishCollectibleDecorAsFreeListing requiere al menos 1 imagen");
+  }
+ 
+  // Propagar material del productData al visionResult (mismo patrón que brand en die-cast)
+  if (productData?.material) {
+    visionResult.user_provided_material = productData.material;
+  }
+ 
+  const cd = visionResult?.collectible_decor || {};
+  const token = await getValidToken();
+  const visionCommon = visionResult?.common || {};
+  const uniqueId = Date.now().toString().slice(-5);
+ 
+  console.log(`[publishCollectibleDecorAsFreeListing] Categoría forzada: ${COLLECTIBLE_DECOR_CATEGORY_ID} (Estatuas - cajón de descarte)`);
+ 
+  // 1. Subir fotos
+  console.log(`[publishCollectibleDecorAsFreeListing] Subiendo ${images.length} foto(s)...`);
+  const uploadResults = await Promise.allSettled(
+    images.map(img => uploadPictureToML(img.buffer, img.mimeType))
+  );
+ 
+  const successfulIds = [];
+  uploadResults.forEach((r, idx) => {
+    if (r.status === "fulfilled" && r.value) {
+      const id = typeof r.value === "object" ? r.value.id : r.value;
+      if (id) successfulIds.push(id);
+    } else {
+      console.error(`[publishCollectibleDecorAsFreeListing] ❌ Foto ${idx + 1} falló:`, r.reason?.message || r.reason);
+    }
+  });
+ 
+  if (successfulIds.length === 0) {
+    throw new Error(`Todas las ${images.length} fotos fallaron al subirse a ML`);
+  }
+ 
+  console.log(`[publishCollectibleDecorAsFreeListing] ✅ ${successfulIds.length}/${images.length} fotos subidas`);
+ 
+  // 2. Atributos
+  const attributes = buildCollectibleDecorAttributes(visionResult);
+ 
+  // 3. family_name único
+  const baseFamily = [
+    cd.subtype || "Pieza coleccionable",
+    cd.theme,
+    visionCommon.material,
+    visionCommon.approx_height_cm ? `${visionCommon.approx_height_cm}cm` : null,
+  ].filter(Boolean).join(" ");
+  const familyName = `${baseFamily} #${uniqueId}`;
+ 
+  console.log(`[publishCollectibleDecorAsFreeListing] family_name: "${familyName}"`);
+ 
+  // 4. Descripción
+  const descriptionParts = [];
+  if (visionCommon.description) {
+    descriptionParts.push(visionCommon.description);
+  } else {
+    descriptionParts.push("Pieza decorativa coleccionable.");
+  }
+ 
+  const techLines = [];
+  if (cd.subtype) techLines.push(`Tipo: ${cd.subtype}`);
+  if (cd.theme) techLines.push(`Temática: ${cd.theme}`);
+  if (visionCommon.material) techLines.push(`Material: ${visionCommon.material}`);
+  if (visionCommon.approx_height_cm) techLines.push(`Altura: ${visionCommon.approx_height_cm} cm`);
+  if (visionCommon.approx_width_cm) techLines.push(`Ancho: ${visionCommon.approx_width_cm} cm`);
+  if (visionCommon.manufacturing_year) techLines.push(`Año: ${visionCommon.manufacturing_year}`);
+ 
+  if (techLines.length > 0) {
+    descriptionParts.push("\n--- DETALLES ---\n" + techLines.join("\n"));
+  }
+ 
+  if (visionCommon.condition === "used" || visionCommon.condition === "damaged") {
+    descriptionParts.push(
+      "\n--- IMPORTANTE ---\nLas fotos forman parte de la descripción y reflejan el estado real. Ante cualquier duda, consultá antes de comprar."
+    );
+  }
+ 
+  const plainDescription = descriptionParts.join("\n");
+ 
+  // 5. Payload
+  const item = {
+    family_name: familyName,
+    category_id: COLLECTIBLE_DECOR_CATEGORY_ID,
+    price: productData.price,
+    currency_id: "ARS",
+    available_quantity: productData.stock || 1,
+    buying_mode: "buy_it_now",
+    listing_type_id: "gold_pro",
+    condition: productData.condition || "new",
+    pictures: successfulIds.map(id => ({ id })),
+    attributes: attributes,
+    shipping: {
+      mode: "me2",
+      local_pick_up: true,
+      free_shipping: false,
+      tags: ["self_service_in"],
+    },
+  };
+ 
+  console.log("[publishCollectibleDecorAsFreeListing] PAYLOAD:", JSON.stringify(item, null, 2));
+ 
+  // 6. Publicar
+  const response = await fetch(`${ML_BASE}/items`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(item),
+  });
+ 
+  const data = await response.json();
+ 
+  if (!response.ok || data.error) {
+    console.error("[publishCollectibleDecorAsFreeListing] ❌ ML rechazó:", JSON.stringify(data, null, 2));
+    throw new Error(
+      `ML rechazó publicación de collectible_decor: ${data.message || data.error} — ${JSON.stringify(data.cause || data)}`
+    );
+  }
+ 
+  console.log(`[publishCollectibleDecorAsFreeListing] ✅ Publicado: ${data.id}`);
+ 
+  // 7. Setear descripción aparte
+  try {
+    const descResp = await fetch(`${ML_BASE}/items/${data.id}/description`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ plain_text: plainDescription }),
+    });
+ 
+    if (descResp.ok) {
+      console.log(`[publishCollectibleDecorAsFreeListing] ✅ Descripción seteada en ${data.id}`);
+    } else {
+      const descErr = await descResp.json();
+      console.error(`[publishCollectibleDecorAsFreeListing] ⚠️ Descripción falló:`, JSON.stringify(descErr));
+    }
+  } catch (descErr) {
+    console.error(`[publishCollectibleDecorAsFreeListing] ⚠️ Excepción seteando descripción:`, descErr.message);
+  }
+ 
+  return {
+    ...data,
+    publication_type: "free_listing",
+    category_id: COLLECTIBLE_DECOR_CATEGORY_ID,
+    item_type: "collectible_decor",
+  };
+};
 // ============================================================================
 // DEBUG / UTILITY: Descubrimiento de categorías y atributos de ML
 // Se usa para descubrir category_id y atributos requeridos antes de
