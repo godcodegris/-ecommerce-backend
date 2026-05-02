@@ -7,6 +7,11 @@
 // Helper exportado:
 //   cleanupOrphanedBatches()  → llamar al boot del server para marcar batches huérfanos
 //
+// Contrato del request a /batch-form (multipart/form-data):
+//   - Campo "photo" repetido N veces (un archivo por item)
+//   - Campo "prices" como string JSON con array de precios paralelo a las fotos
+//     ej: prices='[8000, 8500, 12000]'
+//
 // Notas:
 //   - El loop usa setImmediate (fire and forget) en el mismo proceso Node.
 //     Si Railway reinicia mid-batch, los items que faltan quedan sin procesar
@@ -25,8 +30,7 @@ const router = express.Router();
 const MAX_ITEMS_PER_BATCH = 50;
 const THROTTLE_MS = 500;
 
-// Multer con storage en memoria. Usamos .any() porque los nombres de campo
-// son dinámicos (items[0][photo], items[1][photo], ...).
+// Multer con storage en memoria.
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -40,15 +44,17 @@ const upload = multer({
 // ─────────────────────────────────────────────────────────────────
 router.post("/batch-form", upload.any(), async (req, res) => {
   try {
-    // 1. Parsear items del multipart. Esperamos:
-    //    items[0][photo] = File, items[0][price] = "5000"
-    //    items[1][photo] = File, items[1][price] = "8000"
-    //    ...
-    const items = parseBatchItems(req.files, req.body);
+    // 1. Parsear items del multipart
+    let items;
+    try {
+      items = parseBatchItems(req.files, req.body);
+    } catch (parseErr) {
+      return res.status(400).json({ error: parseErr.message });
+    }
 
     if (items.length === 0) {
       return res.status(400).json({
-        error: "No se recibieron items válidos. Formato esperado: items[N][photo] + items[N][price]",
+        error: "No se recibieron items válidos. Formato esperado: campo 'photo' repetido + campo 'prices' como JSON array.",
       });
     }
 
@@ -149,48 +155,38 @@ router.get("/batch-status/:id", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Parsea el multipart de Express+Multer al formato esperado.
+ * Parsea el multipart al formato esperado.
  *
- * Multer .any() devuelve req.files como array con .fieldname tipo "items[0][photo]".
- * Los campos no-archivo (precios) llegan en req.body con misma sintaxis "items[0][price]".
+ * Contrato:
+ *   - files: campo "photo" repetido N veces
+ *   - body.prices: JSON string con array de precios paralelo a las fotos
+ *     ej: prices='[8000, 8500, 12000]'
  */
 function parseBatchItems(files, body) {
-  const itemsMap = new Map();
+  const photos = (files || []).filter(f => f.fieldname === "photo");
 
-  console.log("[parseBatchItems] file fieldnames:", (files || []).map(f => f.fieldname));
-console.log("[parseBatchItems] body keys:", Object.keys(body || {}));
-
-  // Parsear archivos
-  const fileRegex = /^items\[(\d+)\]\[photo\]$/;
-  for (const file of files || []) {
-    const match = file.fieldname.match(fileRegex);
-    if (!match) continue;
-    const idx = parseInt(match[1]);
-    if (!itemsMap.has(idx)) itemsMap.set(idx, {});
-    itemsMap.get(idx).photo = {
-      buffer: file.buffer,
-      mimeType: file.mimetype,
-    };
-  }
-
-  // Parsear precios (y otros campos opcionales por si en el futuro se agregan)
-  const bodyRegex = /^items\[(\d+)\]\[(\w+)\]$/;
-  for (const [key, value] of Object.entries(body || {})) {
-    const match = key.match(bodyRegex);
-    if (!match) continue;
-    const idx = parseInt(match[1]);
-    const field = match[2];
-    if (!itemsMap.has(idx)) itemsMap.set(idx, {});
-    if (field === "price") {
-      itemsMap.get(idx).price = parseFloat(value);
-    } else {
-      itemsMap.get(idx)[field] = value;
+  let prices = [];
+  if (body?.prices) {
+    try {
+      prices = JSON.parse(body.prices);
+      if (!Array.isArray(prices)) {
+        throw new Error("'prices' debe ser un array JSON");
+      }
+    } catch (err) {
+      throw new Error(`No se pudo parsear 'prices' como JSON: ${err.message}`);
     }
   }
 
-  // Convertir a array ordenado por índice
-  const sortedIndexes = [...itemsMap.keys()].sort((a, b) => a - b);
-  return sortedIndexes.map(idx => itemsMap.get(idx));
+  if (photos.length !== prices.length) {
+    throw new Error(
+      `Cantidad de fotos (${photos.length}) no coincide con cantidad de precios (${prices.length})`
+    );
+  }
+
+  return photos.map((file, idx) => ({
+    photo: { buffer: file.buffer, mimeType: file.mimetype },
+    price: parseFloat(prices[idx]),
+  }));
 }
 
 /**
