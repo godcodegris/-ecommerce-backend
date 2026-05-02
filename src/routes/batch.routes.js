@@ -3,6 +3,7 @@
 // Endpoints:
 //   POST /api/publish/batch-form        → recibe N fotos+precios, devuelve batch_id, dispara loop async
 //   GET  /api/publish/batch-status/:id  → estado del batch (para polling cada 2s desde el frontend)
+//   GET  /api/publish/batches           → lista los últimos N batches (para popular histórico al cargar)
 //
 // Helper exportado:
 //   cleanupOrphanedBatches()  → llamar al boot del server para marcar batches huérfanos
@@ -11,13 +12,6 @@
 //   - Campo "photo" repetido N veces (un archivo por item)
 //   - Campo "prices" como string JSON con array de precios paralelo a las fotos
 //     ej: prices='[8000, 8500, 12000]'
-//
-// Notas:
-//   - El loop usa setImmediate (fire and forget) en el mismo proceso Node.
-//     Si Railway reinicia mid-batch, los items que faltan quedan sin procesar
-//     y el batch queda marcado como 'interrumpido' por el cleanup.
-//   - Throttle de 500ms entre items para no saturar rate limit de ML.
-//   - Máx 50 items por batch.
 
 import express from "express";
 import multer from "multer";
@@ -29,12 +23,12 @@ const router = express.Router();
 
 const MAX_ITEMS_PER_BATCH = 50;
 const THROTTLE_MS = 500;
+const HISTORY_LIMIT = 50;
 
-// Multer con storage en memoria.
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB por archivo
+    fileSize: 10 * 1024 * 1024,
     files: MAX_ITEMS_PER_BATCH,
   },
 });
@@ -44,7 +38,6 @@ const upload = multer({
 // ─────────────────────────────────────────────────────────────────
 router.post("/batch-form", upload.any(), async (req, res) => {
   try {
-    // 1. Parsear items del multipart
     let items;
     try {
       items = parseBatchItems(req.files, req.body);
@@ -64,21 +57,15 @@ router.post("/batch-form", upload.any(), async (req, res) => {
       });
     }
 
-    // Validar que cada item tenga precio válido
     for (const [idx, item] of items.entries()) {
       if (!item.price || item.price <= 0) {
-        return res.status(400).json({
-          error: `Item ${idx}: precio inválido o faltante`,
-        });
+        return res.status(400).json({ error: `Item ${idx}: precio inválido o faltante` });
       }
       if (!item.photo) {
-        return res.status(400).json({
-          error: `Item ${idx}: foto faltante`,
-        });
+        return res.status(400).json({ error: `Item ${idx}: foto faltante` });
       }
     }
 
-    // 2. Crear registro del batch
     const batchId = randomUUID();
     await pool.query(
       `INSERT INTO publicaciones_batch (id, total, status)
@@ -88,7 +75,6 @@ router.post("/batch-form", upload.any(), async (req, res) => {
 
     console.log(`[batch-form] batch=${batchId} creado con ${items.length} items`);
 
-    // 3. Disparar loop async (fire and forget) y responder inmediatamente
     setImmediate(() => processBatch(batchId, items));
 
     return res.status(202).json({
@@ -99,6 +85,29 @@ router.post("/batch-form", upload.any(), async (req, res) => {
 
   } catch (err) {
     console.error("[batch-form] error inesperado:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// GET /api/publish/batches  → histórico (últimos N batches)
+// ─────────────────────────────────────────────────────────────────
+router.get("/batches", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, total, processed, succeeded, failed, status, created_at, finished_at
+       FROM publicaciones_batch
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [HISTORY_LIMIT]
+    );
+
+    return res.json({
+      batches: result.rows,
+    });
+
+  } catch (err) {
+    console.error("[batches] error:", err);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -122,7 +131,6 @@ router.get("/batch-status/:id", async (req, res) => {
 
     const batch = batchResult.rows[0];
 
-    // Traer los items del batch en orden
     const itemsResult = await pool.query(
       `SELECT id, batch_index, titulo, ml_id, permalink, status,
               requiere_revision, motivo_revision, error_msg
@@ -154,14 +162,6 @@ router.get("/batch-status/:id", async (req, res) => {
 // HELPERS
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Parsea el multipart al formato esperado.
- *
- * Contrato:
- *   - files: campo "photo" repetido N veces
- *   - body.prices: JSON string con array de precios paralelo a las fotos
- *     ej: prices='[8000, 8500, 12000]'
- */
 function parseBatchItems(files, body) {
   const photos = (files || []).filter(f => f.fieldname === "photo");
 
@@ -189,10 +189,6 @@ function parseBatchItems(files, body) {
   }));
 }
 
-/**
- * Loop principal del batch. Procesa items secuencialmente con throttle.
- * Se ejecuta en background vía setImmediate.
- */
 async function processBatch(batchId, items) {
   console.log(`[processBatch] batch=${batchId} arrancando ${items.length} items`);
 
@@ -204,7 +200,7 @@ async function processBatch(batchId, items) {
 
     try {
       const result = await processOneItem({
-        images: [item.photo], // 1 foto, processOneItem la duplica a 3
+        images: [item.photo],
         price: item.price,
         stock: 1,
         batchId,
@@ -213,15 +209,12 @@ async function processBatch(batchId, items) {
 
       if (result.status === "publicado") succeeded++;
       else if (result.status === "error") failed++;
-      // 'pendiente_manual' no cuenta como succeeded ni como failed estricto
 
     } catch (err) {
-      // processOneItem captura sus propios errores, pero por las dudas
       console.error(`[processBatch] batch=${batchId} item=${i} excepción no capturada:`, err);
       failed++;
     }
 
-    // Actualizar progreso después de cada item
     try {
       await pool.query(
         `UPDATE publicaciones_batch
@@ -233,13 +226,11 @@ async function processBatch(batchId, items) {
       console.error(`[processBatch] no se pudo actualizar progreso:`, dbErr.message);
     }
 
-    // Throttle entre items (excepto después del último)
     if (i < items.length - 1) {
       await sleep(THROTTLE_MS);
     }
   }
 
-  // Marcar batch como completado
   try {
     await pool.query(
       `UPDATE publicaciones_batch
@@ -260,11 +251,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Llamar al arrancar el server (desde app.js, después de conectar DB).
- * Marca como 'interrumpido' cualquier batch que haya quedado en 'procesando'
- * por reinicio de Railway o crash del proceso.
- */
 export async function cleanupOrphanedBatches() {
   try {
     const result = await pool.query(
