@@ -157,6 +157,9 @@ router.get("/batch-status/:id", async (req, res) => {
 function parseBatchItems(files, body) {
   const itemsMap = new Map();
 
+  console.log("[parseBatchItems] file fieldnames:", (files || []).map(f => f.fieldname));
+console.log("[parseBatchItems] body keys:", Object.keys(body || {}));
+
   // Parsear archivos
   const fileRegex = /^items\[(\d+)\]\[photo\]$/;
   for (const file of files || []) {
