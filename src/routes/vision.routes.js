@@ -486,6 +486,6 @@ router.get("/inspect-item/:mlId", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-export { analyzeImageWithVision };
+
 
 export default router;
