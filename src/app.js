@@ -72,6 +72,7 @@ app.use("/mercadolibre", mlRouter);
 app.use("/auth", mlRouter);
 app.use("/chat", chatRouter);
 app.use("/api/publish", visionRouter);
+app.use("/panel", express.static(join(__dirname, "../public/panel")));
 app.use("/api/publish", batchRouter);
 app.use("/api/debug", debugRouter);
 

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de publicación batch</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f4f6f8;
+    color: #222;
+    line-height: 1.5;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin-bottom: 12px; color: #444; }
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+
+  /* ─── Uploader ─── */
+  .uploader {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    margin-bottom: 28px;
+  }
+  .drop-zone {
+    border: 2px dashed #cbd5e0;
+    border-radius: 6px;
+    padding: 28px;
+    text-align: center;
+    color: #718096;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 16px;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: #4299e1;
+    background: #ebf8ff;
+    color: #2b6cb0;
+  }
+  .drop-zone input[type=file] { display: none; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .card {
+    background: #fafafa;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px;
+    position: relative;
+  }
+  .card img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    background: #eee;
+  }
+  .card input.price {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #cbd5e0;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .card input.price:invalid {
+    border-color: #fc8181;
+  }
+  .card .remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .card .remove:hover { background: #e53e3e; }
+
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .actions .info { color: #4a5568; font-size: 14px; }
+  button.primary {
+    background: #4299e1;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.primary:hover:not(:disabled) { background: #2b6cb0; }
+  button.primary:disabled {
+    background: #cbd5e0;
+    cursor: not-allowed;
+  }
+
+  /* ─── Histórico ─── */
+  .history {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .batch-row {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .batch-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    background: #fafafa;
+    transition: background 0.1s;
+  }
+  .batch-header:hover { background: #f0f4f8; }
+  .batch-header .id {
+    font-family: monospace;
+    font-size: 12px;
+    color: #718096;
+  }
+  .batch-header .status {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .status-procesando { background: #fef5e7; color: #c05621; }
+  .status-completado { background: #f0fff4; color: #276749; }
+  .status-interrumpido { background: #fed7d7; color: #c53030; }
+
+  .batch-header .progress {
+    flex: 1;
+    font-size: 14px;
+    color: #4a5568;
+  }
+  .batch-header .date {
+    font-size: 12px;
+    color: #a0aec0;
+  }
+  .batch-header .caret {
+    font-size: 14px;
+    color: #a0aec0;
+    transition: transform 0.15s;
+  }
+  .batch-row.expanded .caret { transform: rotate(90deg); }
+
+  .batch-detail {
+    display: none;
+    padding: 14px;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+  }
+  .batch-row.expanded .batch-detail { display: block; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid #edf2f7;
+  }
+  th { color: #718096; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  td a { color: #3182ce; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .item-status-ok { color: #276749; }
+  .item-status-error { color: #c53030; }
+  .item-status-pendiente_manual { color: #c05621; }
+
+  .empty {
+    color: #a0aec0;
+    text-align: center;
+    padding: 20px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Panel de publicación batch</h1>
+<p class="subtitle">Subí fotos con sus precios y publicá en lotes a Mercado Libre.</p>
+
+<!-- ─────────── UPLOADER ─────────── -->
+<section class="uploader">
+  <h2>Nuevo lote</h2>
+
+  <label class="drop-zone" id="drop-zone">
+    <div>📷 Arrastrá fotos acá o <strong>hacé click para seleccionar</strong></div>
+    <div style="font-size:12px; margin-top:4px;">JPG/PNG, máx 50 fotos, 10MB cada una</div>
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" multiple>
+  </label>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="actions">
+    <div class="info" id="info">0 fotos</div>
+    <button class="primary" id="submit-btn" disabled>Procesar lote</button>
+  </div>
+</section>
+
+<!-- ─────────── HISTÓRICO ─────────── -->
+<section class="history">
+  <h2>Mis lotes</h2>
+  <div id="batches-list">
+    <div class="empty">Cargando...</div>
+  </div>
+</section>
+
+<script>
+// ───────────────────────────────────────────────────────────────
+// CONFIG
+// ───────────────────────────────────────────────────────────────
+const API_BASE = ""; // mismo origen, deja vacío
+const POLL_INTERVAL_MS = 2000;
+const HISTORY_REFRESH_MS = 5000; // cada cuánto re-listar el histórico
+
+// ───────────────────────────────────────────────────────────────
+// ESTADO DEL UPLOADER
+// ───────────────────────────────────────────────────────────────
+let pendingItems = []; // [{ id, file, previewUrl, price }]
+let nextItemId = 1;
+
+const fileInput = document.getElementById("file-input");
+const dropZone = document.getElementById("drop-zone");
+const cardsContainer = document.getElementById("cards");
+const infoEl = document.getElementById("info");
+const submitBtn = document.getElementById("submit-btn");
+const batchesList = document.getElementById("batches-list");
+
+// ───────────────────────────────────────────────────────────────
+// MANEJO DE ARCHIVOS
+// ───────────────────────────────────────────────────────────────
+fileInput.addEventListener("change", e => {
+  addFiles(e.target.files);
+  fileInput.value = ""; // permite re-seleccionar el mismo archivo
+});
+
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  addFiles(e.dataTransfer.files);
+});
+
+function addFiles(fileList) {
+  const remainingSlots = 50 - pendingItems.length;
+  if (remainingSlots <= 0) {
+    alert("Máximo 50 fotos por lote. Procesá las actuales primero.");
+    return;
+  }
+
+  const files = Array.from(fileList).slice(0, remainingSlots);
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    if (file.size > 10 * 1024 * 1024) {
+      alert(`"${file.name}" supera 10MB y será omitida.`);
+      continue;
+    }
+    const item = {
+      id: nextItemId++,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      price: "",
+    };
+    pendingItems.push(item);
+  }
+  renderCards();
+}
+
+function renderCards() {
+  cardsContainer.innerHTML = "";
+  for (const item of pendingItems) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <button class="remove" data-id="${item.id}" title="Quitar">×</button>
+      <img src="${item.previewUrl}" alt="">
+      <input class="price" type="number" min="1" step="1" placeholder="Precio ARS"
+             data-id="${item.id}" value="${item.price}">
+    `;
+    cardsContainer.appendChild(card);
+  }
+
+  // Listeners
+  cardsContainer.querySelectorAll(".remove").forEach(btn => {
+    btn.addEventListener("click", () => removeItem(parseInt(btn.dataset.id)));
+  });
+  cardsContainer.querySelectorAll(".price").forEach(input => {
+    input.addEventListener("input", () => {
+      const id = parseInt(input.dataset.id);
+      const item = pendingItems.find(x => x.id === id);
+      if (item) item.price = input.value;
+      updateSubmitState();
+    });
+  });
+
+  updateSubmitState();
+}
+
+function removeItem(id) {
+  const item = pendingItems.find(x => x.id === id);
+  if (item) URL.revokeObjectURL(item.previewUrl);
+  pendingItems = pendingItems.filter(x => x.id !== id);
+  renderCards();
+}
+
+function updateSubmitState() {
+  const count = pendingItems.length;
+  const allValid = count > 0 && pendingItems.every(x => parseFloat(x.price) > 0);
+  infoEl.textContent = `${count} foto${count !== 1 ? "s" : ""}`;
+  submitBtn.disabled = !allValid;
+  submitBtn.textContent = count > 0 ? `Procesar lote (${count})` : "Procesar lote";
+}
+
+// ───────────────────────────────────────────────────────────────
+// SUBMIT BATCH
+// ───────────────────────────────────────────────────────────────
+submitBtn.addEventListener("click", async () => {
+  if (pendingItems.length === 0) return;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Enviando...";
+
+  try {
+    const formData = new FormData();
+    const prices = [];
+    for (const item of pendingItems) {
+      formData.append("photo", item.file);
+      prices.push(parseFloat(item.price));
+    }
+    formData.append("prices", JSON.stringify(prices));
+
+    const resp = await fetch(`${API_BASE}/api/publish/batch-form`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+
+    console.log("Batch creado:", data);
+
+    // Auto-limpiar uploader
+    for (const item of pendingItems) URL.revokeObjectURL(item.previewUrl);
+    pendingItems = [];
+    renderCards();
+
+    // Refrescar histórico inmediatamente
+    refreshHistory();
+
+  } catch (err) {
+    alert(`Error al enviar el lote: ${err.message}`);
+    console.error(err);
+  } finally {
+    submitBtn.textContent = "Procesar lote";
+    updateSubmitState();
+  }
+});
+
+// ───────────────────────────────────────────────────────────────
+// HISTÓRICO
+// ───────────────────────────────────────────────────────────────
+const expandedBatches = new Set(); // batches con detalle abierto
+const detailCache = new Map();      // batchId → últimos items vistos
+
+async function refreshHistory() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/publish/batches`);
+    const data = await resp.json();
+    renderHistory(data.batches || []);
+
+    // Pollear detalle de los expandidos + de los procesando
+    for (const batch of data.batches || []) {
+      if (expandedBatches.has(batch.id) || batch.status === "procesando") {
+        fetchBatchDetail(batch.id);
+      }
+    }
+  } catch (err) {
+    console.error("refreshHistory:", err);
+  }
+}
+
+function renderHistory(batches) {
+  if (batches.length === 0) {
+    batchesList.innerHTML = '<div class="empty">No hay lotes todavía. Subí fotos arriba.</div>';
+    return;
+  }
+
+  batchesList.innerHTML = "";
+  for (const batch of batches) {
+    const row = document.createElement("div");
+    row.className = "batch-row" + (expandedBatches.has(batch.id) ? " expanded" : "");
+    row.dataset.id = batch.id;
+
+    const shortId = batch.id.split("-")[0];
+    const date = new Date(batch.created_at).toLocaleString("es-AR", {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+    });
+
+    let progressText;
+    if (batch.status === "completado") {
+      progressText = `${batch.succeeded}/${batch.total} publicados`;
+      if (batch.failed > 0) progressText += ` · ${batch.failed} con error`;
+    } else if (batch.status === "interrumpido") {
+      progressText = `${batch.processed}/${batch.total} (interrumpido)`;
+    } else {
+      progressText = `${batch.processed}/${batch.total} procesando`;
+    }
+
+    row.innerHTML = `
+      <div class="batch-header">
+        <span class="caret">▶</span>
+        <span class="id">${shortId}</span>
+        <span class="status status-${batch.status}">${batch.status}</span>
+        <span class="progress">${progressText}</span>
+        <span class="date">${date}</span>
+      </div>
+      <div class="batch-detail" id="detail-${batch.id}">
+        <div class="empty">Cargando detalle...</div>
+      </div>
+    `;
+
+    row.querySelector(".batch-header").addEventListener("click", () => toggleBatch(batch.id));
+    batchesList.appendChild(row);
+
+    // Si ya tenemos detalle cacheado, renderizarlo
+    if (detailCache.has(batch.id)) {
+      renderBatchDetail(batch.id, detailCache.get(batch.id));
+    }
+  }
+}
+
+function toggleBatch(batchId) {
+  const row = document.querySelector(`.batch-row[data-id="${batchId}"]`);
+  if (!row) return;
+
+  if (expandedBatches.has(batchId)) {
+    expandedBatches.delete(batchId);
+    row.classList.remove("expanded");
+  } else {
+    expandedBatches.add(batchId);
+    row.classList.add("expanded");
+    fetchBatchDetail(batchId);
+  }
+}
+
+async function fetchBatchDetail(batchId) {
+  try {
+    const resp = await fetch(`${API_BASE}/api/publish/batch-status/${batchId}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+
+    detailCache.set(batchId, data.items || []);
+    renderBatchDetail(batchId, data.items || []);
+  } catch (err) {
+    console.error(`fetchBatchDetail ${batchId}:`, err);
+  }
+}
+
+function renderBatchDetail(batchId, items) {
+  const container = document.getElementById(`detail-${batchId}`);
+  if (!container) return;
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty">Sin items aún (procesando...)</div>';
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Título</th>
+          <th>Estado</th>
+          <th>ML ID</th>
+          <th>Link</th>
+          <th>Notas</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  for (const item of items) {
+    const statusClass = `item-status-${item.status}`;
+    const link = item.permalink
+      ? `<a href="${item.permalink}" target="_blank" rel="noopener">ver en ML ↗</a>`
+      : "—";
+    const notas = item.error_msg
+      ? `<span class="item-status-error">${escapeHtml(item.error_msg)}</span>`
+      : (item.requiere_revision && item.motivo_revision
+          ? `<span class="item-status-pendiente_manual">${escapeHtml(item.motivo_revision)}</span>`
+          : "—");
+
+    html += `
+      <tr>
+        <td>${(item.batch_index ?? 0) + 1}</td>
+        <td>${escapeHtml(item.titulo || "—")}</td>
+        <td class="${statusClass}">${item.status || "—"}</td>
+        <td>${item.ml_id || "—"}</td>
+        <td>${link}</td>
+        <td>${notas}</td>
+      </tr>
+    `;
+  }
+
+  html += "</tbody></table>";
+  container.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// ───────────────────────────────────────────────────────────────
+// POLLING
+// ───────────────────────────────────────────────────────────────
+refreshHistory();
+setInterval(refreshHistory, HISTORY_REFRESH_MS);
+
+// Polling más rápido del detalle de batches procesando
+setInterval(() => {
+  document.querySelectorAll(".batch-row").forEach(row => {
+    const status = row.querySelector(".status")?.textContent;
+    if (status === "procesando") {
+      fetchBatchDetail(row.dataset.id);
+    }
+  });
+}, POLL_INTERVAL_MS);
+
+</script>
+</body>
+</html>
