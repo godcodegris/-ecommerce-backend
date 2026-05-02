@@ -20,8 +20,9 @@ dotenv.config({ path: join(__dirname, "../.env") });
 import pool from "./db.js";
 
 pool.query("SELECT NOW()")
-  .then(res => {
+  .then(async res => {
     console.log("DB conectada:", res.rows[0]);
+    await cleanupOrphanedBatches();
   })
   .catch(err => {
     console.error("Error conectando a DB:", err);
@@ -34,6 +35,8 @@ import usersRouter from "./routes/users.routes.js";
 import productsRouter from "./routes/products.routes.js";
 import mlRouter from "./routes/mercadolibre.routes.js";
 import visionRouter from "./routes/vision.routes.js";
+import batchRouter from "./routes/batch.routes.js";
+import { cleanupOrphanedBatches } from "./routes/batch.routes.js";
 
 const app = express();
 
@@ -69,6 +72,7 @@ app.use("/mercadolibre", mlRouter);
 app.use("/auth", mlRouter);
 app.use("/chat", chatRouter);
 app.use("/api/publish", visionRouter);
+app.use("/api/publish", batchRouter);
 app.use("/api/debug", debugRouter);
 
 
