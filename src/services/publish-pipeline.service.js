@@ -17,6 +17,7 @@
 import * as mlService from "./mercadolibre.service.js";
 import pool from "../db.js";
 import { analyzeImageWithVision } from "../routes/vision.routes.js";
+import sharp from "sharp";
 // ^ Si tu analyzeImageWithVision vive en otro path, ajustá el import.
 //   En tu vision.routes.js actual está como función local; al extraerla acá
 //   conviene moverla a un service compartido. Si todavía vive en vision.routes.js,
@@ -39,6 +40,20 @@ const PUBLISH_FN_BY_TYPE = {
   action_figure: mlService.publishProductAsFreeListing,
 };
  
+// Redimensiona y comprime una imagen antes de mandarla a Vision.
+// Vision (Claude) tiene límite de 5MB por imagen y procesa internamente
+// a ~1568px en el lado mayor, así que mandar más resolución es desperdicio.
+// Esta función NO toca la imagen original; devuelve un buffer nuevo.
+async function prepareImageForVision(imageBuffer) {
+  return await sharp(imageBuffer)
+    .rotate() // aplica rotación EXIF (importante para fotos de celular)
+    .resize(2000, 2000, {
+      fit: "inside",            // mantiene aspect ratio
+      withoutEnlargement: true, // no agranda si ya es chica
+    })
+    .jpeg({ quality: 85, mozjpeg: true })
+    .toBuffer();
+}
 /**
  * Procesa un único producto end-to-end.
  *
@@ -110,10 +125,11 @@ export async function processOneItem(input) {
     );
  
     // 2. Vision sobre la primera foto
-    const visionResult = await analyzeImageWithVision(
-      primaryImage.buffer,
-      primaryImage.mimeType
-    );
+  const visionImageBuffer = await prepareImageForVision(primaryImage.buffer);
+const visionResult = await analyzeImageWithVision(
+  visionImageBuffer,
+  "image/jpeg" // sharp devuelve JPEG siempre
+);
     const visionCommon = visionResult.common || {};
  
     console.log(
