@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel de publicación batch</title>
+
+<!-- exifr lite: ~10KB, solo lectura de timestamps EXIF -->
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/lite.umd.js"></script>
+
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -46,7 +50,7 @@
 
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 12px;
     margin-bottom: 16px;
   }
@@ -56,24 +60,6 @@
     border-radius: 6px;
     padding: 8px;
     position: relative;
-  }
-  .card img {
-    width: 100%;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 4px;
-    margin-bottom: 6px;
-    background: #eee;
-  }
-  .card input.price {
-    width: 100%;
-    padding: 6px 8px;
-    border: 1px solid #cbd5e0;
-    border-radius: 4px;
-    font-size: 14px;
-  }
-  .card input.price:invalid {
-    border-color: #fc8181;
   }
   .card .remove {
     position: absolute;
@@ -88,8 +74,79 @@
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
+    z-index: 2;
   }
   .card .remove:hover { background: #e53e3e; }
+
+  /* ─── Multi-foto ─── */
+  .thumbs-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .thumb {
+    flex: 1;
+    position: relative;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #eee;
+    aspect-ratio: 1 / 1;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .thumb:hover {
+    transform: scale(1.03);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+  }
+  .thumb.cover {
+    outline: 2px solid #4299e1;
+    outline-offset: -2px;
+  }
+  .cover-badge {
+    position: absolute;
+    bottom: 2px;
+    left: 2px;
+    background: rgba(66, 153, 225, 0.95);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 2px;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+  }
+  .thumb.dragging {
+    opacity: 0.4;
+  }
+  .thumb.drop-target {
+    outline: 3px dashed #2b6cb0;
+    outline-offset: -3px;
+  }
+
+  .photo-count {
+    font-size: 11px;
+    color: #718096;
+    text-align: center;
+    margin: 4px 0;
+  }
+
+  .card input.price {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #cbd5e0;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .card input.price:invalid {
+    border-color: #fc8181;
+  }
 
   .actions {
     display: flex;
@@ -113,6 +170,71 @@
   button.primary:disabled {
     background: #cbd5e0;
     cursor: not-allowed;
+  }
+  button.secondary {
+    background: white;
+    color: #4a5568;
+    border: 1px solid #cbd5e0;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button.secondary:hover { background: #f7fafc; }
+
+  /* ─── Lightbox ─── */
+  .lightbox-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .lightbox-overlay.active {
+    display: flex;
+  }
+  .lightbox-content {
+    background: white;
+    border-radius: 8px;
+    max-width: 900px;
+    max-height: 90vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .lightbox-image-wrap {
+    flex: 1;
+    background: #1a202c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 300px;
+    overflow: hidden;
+  }
+  .lightbox-image-wrap img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+  }
+  .lightbox-info {
+    padding: 12px 20px;
+    background: #f7fafc;
+    border-top: 1px solid #e2e8f0;
+    font-size: 13px;
+    color: #4a5568;
+  }
+  .lightbox-info strong { color: #2d3748; }
+  .lightbox-actions {
+    padding: 12px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: white;
+    border-top: 1px solid #e2e8f0;
   }
 
   /* ─── Histórico ─── */
@@ -214,17 +336,36 @@
 
   <label class="drop-zone" id="drop-zone">
     <div>📷 Arrastrá fotos acá o <strong>hacé click para seleccionar</strong></div>
-    <div style="font-size:12px; margin-top:4px;">JPG/PNG, máx 50 fotos, 10MB cada una</div>
+    <div style="font-size:12px; margin-top:4px;">
+      Múltiplo de 3 (cada producto = 3 fotos), JPG/PNG, máx 50 productos
+    </div>
     <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" multiple>
   </label>
 
   <div class="cards" id="cards"></div>
 
   <div class="actions">
-    <div class="info" id="info">0 fotos</div>
+    <div class="info" id="info">0 productos</div>
     <button class="primary" id="submit-btn" disabled>Procesar lote</button>
   </div>
 </section>
+
+<!-- ─────────── LIGHTBOX ─────────── -->
+<div class="lightbox-overlay" id="lightbox">
+  <div class="lightbox-content">
+    <div class="lightbox-image-wrap">
+      <img id="lightbox-img" src="" alt="">
+    </div>
+    <div class="lightbox-info" id="lightbox-info"></div>
+    <div class="lightbox-actions">
+      <button class="secondary" id="lightbox-replace">Reemplazar foto</button>
+      <button class="secondary" id="lightbox-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Input oculto para el reemplazo de foto -->
+<input type="file" id="replace-input" accept="image/jpeg,image/png,image/webp" style="display:none">
 
 <!-- ─────────── HISTÓRICO ─────────── -->
 <section class="history">
@@ -238,15 +379,23 @@
 // ───────────────────────────────────────────────────────────────
 // CONFIG
 // ───────────────────────────────────────────────────────────────
-const API_BASE = ""; // mismo origen, deja vacío
+const API_BASE = "";
 const POLL_INTERVAL_MS = 2000;
-const HISTORY_REFRESH_MS = 5000; // cada cuánto re-listar el histórico
+const HISTORY_REFRESH_MS = 5000;
+
+const PHOTOS_PER_PRODUCT = 3;
+const MAX_PRODUCTS = 50;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 // ───────────────────────────────────────────────────────────────
 // ESTADO DEL UPLOADER
 // ───────────────────────────────────────────────────────────────
-let pendingItems = []; // [{ id, file, previewUrl, price }]
-let nextItemId = 1;
+// pendingProducts = [{ id, photos: [{file, previewUrl, timestamp, hasExif}], price }]
+let pendingProducts = [];
+let nextProductId = 1;
+
+// Estado del lightbox: cuál foto se está mostrando
+let lightboxContext = null; // { productId, photoIdx }
 
 const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");
@@ -254,13 +403,19 @@ const cardsContainer = document.getElementById("cards");
 const infoEl = document.getElementById("info");
 const submitBtn = document.getElementById("submit-btn");
 const batchesList = document.getElementById("batches-list");
+const lightboxEl = document.getElementById("lightbox");
+const lightboxImg = document.getElementById("lightbox-img");
+const lightboxInfo = document.getElementById("lightbox-info");
+const lightboxClose = document.getElementById("lightbox-close");
+const lightboxReplace = document.getElementById("lightbox-replace");
+const replaceInput = document.getElementById("replace-input");
 
 // ───────────────────────────────────────────────────────────────
-// MANEJO DE ARCHIVOS
+// CARGA DE ARCHIVOS
 // ───────────────────────────────────────────────────────────────
 fileInput.addEventListener("change", e => {
   addFiles(e.target.files);
-  fileInput.value = ""; // permite re-seleccionar el mismo archivo
+  fileInput.value = "";
 });
 
 dropZone.addEventListener("dragover", e => {
@@ -274,128 +429,381 @@ dropZone.addEventListener("drop", e => {
   addFiles(e.dataTransfer.files);
 });
 
-function addFiles(fileList) {
-  const remainingSlots = 50 - pendingItems.length;
-  if (remainingSlots <= 0) {
-    alert("Máximo 50 fotos por lote. Procesá las actuales primero.");
+async function addFiles(fileList) {
+  const incoming = Array.from(fileList).filter(f => f.type.startsWith("image/"));
+
+  if (incoming.length === 0) return;
+
+  // Validación: múltiplo de 3
+  if (incoming.length % PHOTOS_PER_PRODUCT !== 0) {
+    const faltan = PHOTOS_PER_PRODUCT - (incoming.length % PHOTOS_PER_PRODUCT);
+    alert(
+      `La cantidad de fotos debe ser múltiplo de ${PHOTOS_PER_PRODUCT}.\n\n` +
+      `Recibidas: ${incoming.length}\n` +
+      `Faltan ${faltan} para completar el último producto.\n\n` +
+      `Si rembg falló en alguna foto, revisá el reporte.txt en la carpeta limpia.`
+    );
     return;
   }
 
-  const files = Array.from(fileList).slice(0, remainingSlots);
-  for (const file of files) {
-    if (!file.type.startsWith("image/")) continue;
-    if (file.size > 10 * 1024 * 1024) {
-      alert(`"${file.name}" supera 10MB y será omitida.`);
-      continue;
+  // Validación: tamaño individual
+  for (const file of incoming) {
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`"${file.name}" supera 10MB.`);
+      return;
     }
-    const item = {
-      id: nextItemId++,
+  }
+
+  // Validación: tope de productos
+  const productosNuevos = incoming.length / PHOTOS_PER_PRODUCT;
+  if (pendingProducts.length + productosNuevos > MAX_PRODUCTS) {
+    alert(`Máximo ${MAX_PRODUCTS} productos por lote.`);
+    return;
+  }
+
+  // Lectura de EXIF en paralelo
+  const photosWithMeta = await Promise.all(incoming.map(async (file) => {
+    let timestamp = null;
+    let hasExif = true;
+    try {
+      const exif = await exifr.parse(file, ["DateTimeOriginal", "CreateDate", "DateTime"]);
+      timestamp = exif?.DateTimeOriginal || exif?.CreateDate || exif?.DateTime || null;
+    } catch (e) {
+      // ignorar
+    }
+    if (!timestamp) {
+      hasExif = false;
+      timestamp = new Date(file.lastModified);
+    }
+    return {
       file,
       previewUrl: URL.createObjectURL(file),
-      price: "",
+      timestamp,
+      hasExif,
     };
-    pendingItems.push(item);
+  }));
+
+  // Aviso si alguna no tenía EXIF
+  const sinExif = photosWithMeta.filter(p => !p.hasExif).length;
+  if (sinExif > 0) {
+    const seguir = confirm(
+      `${sinExif} foto(s) no tienen EXIF (¿WhatsApp como imagen, o screenshot?).\n` +
+      `Se ordenarán por fecha de modificación del archivo, que puede no ser cronológica.\n\n` +
+      `¿Continuar igualmente?`
+    );
+    if (!seguir) {
+      photosWithMeta.forEach(p => URL.revokeObjectURL(p.previewUrl));
+      return;
+    }
   }
+
+  // Ordenar cronológicamente
+  photosWithMeta.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Particionar en grupos de 3
+  for (let i = 0; i < photosWithMeta.length; i += PHOTOS_PER_PRODUCT) {
+    pendingProducts.push({
+      id: nextProductId++,
+      photos: photosWithMeta.slice(i, i + PHOTOS_PER_PRODUCT),
+      price: "",
+    });
+  }
+
   renderCards();
 }
 
+// ───────────────────────────────────────────────────────────────
+// RENDER DE CARDS
+// ───────────────────────────────────────────────────────────────
 function renderCards() {
   cardsContainer.innerHTML = "";
-  for (const item of pendingItems) {
+
+  for (const product of pendingProducts) {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card product-card";
+    card.dataset.id = product.id;
+
+    const photosHtml = product.photos.map((p, idx) => `
+      <div class="thumb ${idx === 0 ? 'cover' : ''}"
+           draggable="true"
+           data-product-id="${product.id}"
+           data-photo-idx="${idx}">
+        <img src="${p.previewUrl}" alt="">
+        ${idx === 0 ? '<span class="cover-badge">PORTADA</span>' : ''}
+      </div>
+    `).join("");
+
     card.innerHTML = `
-      <button class="remove" data-id="${item.id}" title="Quitar">×</button>
-      <img src="${item.previewUrl}" alt="">
+      <button class="remove" data-id="${product.id}" title="Quitar producto">×</button>
+      <div class="thumbs-row">${photosHtml}</div>
+      <div class="photo-count">${product.photos.length} foto${product.photos.length !== 1 ? "s" : ""}</div>
       <input class="price" type="number" min="1" step="1" placeholder="Precio ARS"
-             data-id="${item.id}" value="${item.price}">
+             data-id="${product.id}" value="${product.price}">
     `;
     cardsContainer.appendChild(card);
   }
 
-  // Listeners
+  attachCardListeners();
+  attachDragAndDropListeners();
+  updateSubmitState();
+}
+
+function attachCardListeners() {
+  // Botón eliminar
   cardsContainer.querySelectorAll(".remove").forEach(btn => {
-    btn.addEventListener("click", () => removeItem(parseInt(btn.dataset.id)));
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      removeProduct(parseInt(btn.dataset.id));
+    });
   });
+
+  // Input de precio
   cardsContainer.querySelectorAll(".price").forEach(input => {
     input.addEventListener("input", () => {
       const id = parseInt(input.dataset.id);
-      const item = pendingItems.find(x => x.id === id);
-      if (item) item.price = input.value;
+      const product = pendingProducts.find(x => x.id === id);
+      if (product) product.price = input.value;
       updateSubmitState();
     });
   });
 
-  updateSubmitState();
+  // Click en thumb → lightbox
+  cardsContainer.querySelectorAll(".thumb").forEach(thumb => {
+    thumb.addEventListener("click", e => {
+      const productId = parseInt(thumb.dataset.productId);
+      const photoIdx = parseInt(thumb.dataset.photoIdx);
+      openLightbox(productId, photoIdx);
+    });
+  });
 }
 
-function removeItem(id) {
-  const item = pendingItems.find(x => x.id === id);
-  if (item) URL.revokeObjectURL(item.previewUrl);
-  pendingItems = pendingItems.filter(x => x.id !== id);
+function removeProduct(id) {
+  const product = pendingProducts.find(x => x.id === id);
+  if (product) product.photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+  pendingProducts = pendingProducts.filter(x => x.id !== id);
   renderCards();
 }
 
 function updateSubmitState() {
-  const count = pendingItems.length;
-  const allValid = count > 0 && pendingItems.every(x => parseFloat(x.price) > 0);
-  infoEl.textContent = `${count} foto${count !== 1 ? "s" : ""}`;
+  const count = pendingProducts.length;
+  const allValid = count > 0 && pendingProducts.every(p =>
+    parseFloat(p.price) > 0 && p.photos.length === PHOTOS_PER_PRODUCT
+  );
+  const totalPhotos = pendingProducts.reduce((sum, p) => sum + p.photos.length, 0);
+  infoEl.textContent = `${count} producto${count !== 1 ? "s" : ""} (${totalPhotos} fotos)`;
   submitBtn.disabled = !allValid;
   submitBtn.textContent = count > 0 ? `Procesar lote (${count})` : "Procesar lote";
 }
 
 // ───────────────────────────────────────────────────────────────
-// SUBMIT BATCH
+// DRAG & DROP ENTRE CARDS (SWAP)
 // ───────────────────────────────────────────────────────────────
-submitBtn.addEventListener("click", async () => {
-  if (pendingItems.length === 0) return;
+let dragSource = null; // { productId, photoIdx }
 
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Enviando...";
-
-  try {
-    const formData = new FormData();
-    const prices = [];
-    for (const item of pendingItems) {
-      formData.append("photo", item.file);
-      prices.push(parseFloat(item.price));
-    }
-    formData.append("prices", JSON.stringify(prices));
-
-    const resp = await fetch(`${API_BASE}/api/publish/batch-form`, {
-      method: "POST",
-      body: formData,
+function attachDragAndDropListeners() {
+  cardsContainer.querySelectorAll(".thumb").forEach(thumb => {
+    thumb.addEventListener("dragstart", e => {
+      dragSource = {
+        productId: parseInt(thumb.dataset.productId),
+        photoIdx: parseInt(thumb.dataset.photoIdx),
+      };
+      thumb.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      // Necesario para Firefox
+      e.dataTransfer.setData("text/plain", "");
     });
 
-    const data = await resp.json();
-    if (!resp.ok) {
-      throw new Error(data.error || `HTTP ${resp.status}`);
-    }
+    thumb.addEventListener("dragend", () => {
+      thumb.classList.remove("dragging");
+      cardsContainer.querySelectorAll(".thumb").forEach(t => t.classList.remove("drop-target"));
+      dragSource = null;
+    });
 
-    console.log("Batch creado:", data);
+    thumb.addEventListener("dragover", e => {
+      if (!dragSource) return;
+      const targetProductId = parseInt(thumb.dataset.productId);
+      const targetPhotoIdx = parseInt(thumb.dataset.photoIdx);
+      // No marcar como drop-target a sí misma
+      if (targetProductId === dragSource.productId && targetPhotoIdx === dragSource.photoIdx) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      thumb.classList.add("drop-target");
+    });
 
-    // Auto-limpiar uploader
-    for (const item of pendingItems) URL.revokeObjectURL(item.previewUrl);
-    pendingItems = [];
-    renderCards();
+    thumb.addEventListener("dragleave", () => {
+      thumb.classList.remove("drop-target");
+    });
 
-    // Refrescar histórico inmediatamente
-    refreshHistory();
+    thumb.addEventListener("drop", e => {
+      e.preventDefault();
+      thumb.classList.remove("drop-target");
+      if (!dragSource) return;
 
-  } catch (err) {
-    alert(`Error al enviar el lote: ${err.message}`);
-    console.error(err);
-  } finally {
-    submitBtn.textContent = "Procesar lote";
-    updateSubmitState();
+      const targetProductId = parseInt(thumb.dataset.productId);
+      const targetPhotoIdx = parseInt(thumb.dataset.photoIdx);
+
+      // Si soltó sobre sí misma, no hacer nada
+      if (targetProductId === dragSource.productId && targetPhotoIdx === dragSource.photoIdx) return;
+
+      swapPhotos(dragSource, { productId: targetProductId, photoIdx: targetPhotoIdx });
+    });
+  });
+}
+
+function swapPhotos(source, target) {
+  const sourceProduct = pendingProducts.find(p => p.id === source.productId);
+  const targetProduct = pendingProducts.find(p => p.id === target.productId);
+  if (!sourceProduct || !targetProduct) return;
+
+  const sourcePhoto = sourceProduct.photos[source.photoIdx];
+  const targetPhoto = targetProduct.photos[target.photoIdx];
+
+  sourceProduct.photos[source.photoIdx] = targetPhoto;
+  targetProduct.photos[target.photoIdx] = sourcePhoto;
+
+  renderCards();
+}
+
+// ───────────────────────────────────────────────────────────────
+// LIGHTBOX + REEMPLAZO DE FOTO
+// ───────────────────────────────────────────────────────────────
+function openLightbox(productId, photoIdx) {
+  const product = pendingProducts.find(p => p.id === productId);
+  if (!product) return;
+  const photo = product.photos[photoIdx];
+  if (!photo) return;
+
+  lightboxContext = { productId, photoIdx };
+  lightboxImg.src = photo.previewUrl;
+
+  const date = photo.timestamp instanceof Date
+    ? photo.timestamp.toLocaleString("es-AR")
+    : new Date(photo.timestamp).toLocaleString("es-AR");
+  const exifLabel = photo.hasExif
+    ? `<strong>EXIF:</strong> ${date}`
+    : `<strong>Sin EXIF:</strong> ${date} (fecha de archivo)`;
+  const isCover = photoIdx === 0;
+  const sizeKb = Math.round(photo.file.size / 1024);
+
+  lightboxInfo.innerHTML = `
+    ${exifLabel} · 
+    <strong>${photo.file.name}</strong> (${sizeKb} KB)
+    ${isCover ? ' · <span style="color:#2b6cb0;font-weight:600">PORTADA</span>' : ''}
+  `;
+
+  lightboxEl.classList.add("active");
+}
+
+function closeLightbox() {
+  lightboxEl.classList.remove("active");
+  lightboxContext = null;
+}
+
+lightboxClose.addEventListener("click", closeLightbox);
+
+// Cerrar lightbox al click en overlay (pero no en el contenido)
+lightboxEl.addEventListener("click", e => {
+  if (e.target === lightboxEl) closeLightbox();
+});
+
+// Cerrar con Escape
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && lightboxEl.classList.contains("active")) {
+    closeLightbox();
   }
 });
 
+// Botón "Reemplazar foto"
+lightboxReplace.addEventListener("click", () => {
+  if (!lightboxContext) return;
+  replaceInput.click();
+});
+
+replaceInput.addEventListener("change", async e => {
+  const file = e.target.files[0];
+  replaceInput.value = ""; // permite re-seleccionar el mismo archivo después
+
+  if (!file || !lightboxContext) return;
+  if (!file.type.startsWith("image/")) {
+    alert("Tiene que ser una imagen.");
+    return;
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    alert(`"${file.name}" supera 10MB.`);
+    return;
+  }
+
+  const product = pendingProducts.find(p => p.id === lightboxContext.productId);
+  if (!product) return;
+
+  // Leer EXIF de la nueva foto
+  let timestamp = null;
+  let hasExif = true;
+  try {
+    const exif = await exifr.parse(file, ["DateTimeOriginal", "CreateDate", "DateTime"]);
+    timestamp = exif?.DateTimeOriginal || exif?.CreateDate || exif?.DateTime || null;
+  } catch (e) {
+    // ignorar
+  }
+  if (!timestamp) {
+    hasExif = false;
+    timestamp = new Date(file.lastModified);
+  }
+
+  // Liberar URL de la foto vieja
+  const oldPhoto = product.photos[lightboxContext.photoIdx];
+  if (oldPhoto) URL.revokeObjectURL(oldPhoto.previewUrl);
+
+  // Reemplazar
+  product.photos[lightboxContext.photoIdx] = {
+    file,
+    previewUrl: URL.createObjectURL(file),
+    timestamp,
+    hasExif,
+  };
+
+  // Actualizar lightbox con la nueva foto
+  const newPhoto = product.photos[lightboxContext.photoIdx];
+  lightboxImg.src = newPhoto.previewUrl;
+  const date = newPhoto.timestamp instanceof Date
+    ? newPhoto.timestamp.toLocaleString("es-AR")
+    : new Date(newPhoto.timestamp).toLocaleString("es-AR");
+  const exifLabel = newPhoto.hasExif
+    ? `<strong>EXIF:</strong> ${date}`
+    : `<strong>Sin EXIF:</strong> ${date} (fecha de archivo)`;
+  const isCover = lightboxContext.photoIdx === 0;
+  const sizeKb = Math.round(newPhoto.file.size / 1024);
+  lightboxInfo.innerHTML = `
+    ${exifLabel} · 
+    <strong>${newPhoto.file.name}</strong> (${sizeKb} KB)
+    ${isCover ? ' · <span style="color:#2b6cb0;font-weight:600">PORTADA</span>' : ''}
+  `;
+
+  // Re-renderizar cards (la miniatura cambia)
+  renderCards();
+});
+
 // ───────────────────────────────────────────────────────────────
-// HISTÓRICO
+// SUBMIT BATCH (todavía formato VIEJO; se actualiza en Etapa 4)
 // ───────────────────────────────────────────────────────────────
-const expandedBatches = new Set(); // batches con detalle abierto
-const detailCache = new Map();      // batchId → últimos items vistos
+submitBtn.addEventListener("click", async () => {
+  if (pendingProducts.length === 0) return;
+
+  // ⚠️ TODO Etapa 4: armar FormData con campos photo_N agrupados.
+  // Por ahora, este submit NO va a funcionar contra el backend actual.
+  // Se deja para que el flujo visual sea testeable end-to-end del frontend.
+  alert(
+    "El envío al backend todavía no está implementado para multi-foto.\n\n" +
+    "El frontend ya agrupa correctamente — falta adaptar el armado del FormData (Etapa 4) " +
+    "y el endpoint backend (Etapa 5)."
+  );
+});
+
+// ───────────────────────────────────────────────────────────────
+// HISTÓRICO (sin cambios respecto al original)
+// ───────────────────────────────────────────────────────────────
+const expandedBatches = new Set();
+const detailCache = new Map();
 
 async function refreshHistory() {
   try {
@@ -403,7 +811,6 @@ async function refreshHistory() {
     const data = await resp.json();
     renderHistory(data.batches || []);
 
-    // Pollear detalle de los expandidos + de los procesando
     for (const batch of data.batches || []) {
       if (expandedBatches.has(batch.id) || batch.status === "procesando") {
         fetchBatchDetail(batch.id);
@@ -457,7 +864,6 @@ function renderHistory(batches) {
     row.querySelector(".batch-header").addEventListener("click", () => toggleBatch(batch.id));
     batchesList.appendChild(row);
 
-    // Si ya tenemos detalle cacheado, renderizarlo
     if (detailCache.has(batch.id)) {
       renderBatchDetail(batch.id, detailCache.get(batch.id));
     }
@@ -558,7 +964,6 @@ function escapeHtml(s) {
 refreshHistory();
 setInterval(refreshHistory, HISTORY_REFRESH_MS);
 
-// Polling más rápido del detalle de batches procesando
 setInterval(() => {
   document.querySelectorAll(".batch-row").forEach(row => {
     const status = row.querySelector(".status")?.textContent;
