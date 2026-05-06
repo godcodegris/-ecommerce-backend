@@ -23,7 +23,6 @@
   h2 { font-size: 16px; margin-bottom: 12px; color: #444; }
   .subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
 
-  /* ─── Uploader ─── */
   .uploader {
     background: white;
     border-radius: 8px;
@@ -78,7 +77,6 @@
   }
   .card .remove:hover { background: #e53e3e; }
 
-  /* ─── Multi-foto ─── */
   .thumbs-row {
     display: flex;
     gap: 4px;
@@ -122,9 +120,7 @@
     letter-spacing: 0.3px;
     pointer-events: none;
   }
-  .thumb.dragging {
-    opacity: 0.4;
-  }
+  .thumb.dragging { opacity: 0.4; }
   .thumb.drop-target {
     outline: 3px dashed #2b6cb0;
     outline-offset: -3px;
@@ -144,9 +140,7 @@
     border-radius: 4px;
     font-size: 14px;
   }
-  .card input.price:invalid {
-    border-color: #fc8181;
-  }
+  .card input.price:invalid { border-color: #fc8181; }
 
   .actions {
     display: flex;
@@ -182,7 +176,6 @@
   }
   button.secondary:hover { background: #f7fafc; }
 
-  /* ─── Lightbox ─── */
   .lightbox-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -193,9 +186,7 @@
     z-index: 1000;
     padding: 20px;
   }
-  .lightbox-overlay.active {
-    display: flex;
-  }
+  .lightbox-overlay.active { display: flex; }
   .lightbox-content {
     background: white;
     border-radius: 8px;
@@ -237,7 +228,6 @@
     border-top: 1px solid #e2e8f0;
   }
 
-  /* ─── Histórico ─── */
   .history {
     background: white;
     border-radius: 8px;
@@ -330,7 +320,6 @@
 <h1>Panel de publicación batch</h1>
 <p class="subtitle">Subí fotos con sus precios y publicá en lotes a Mercado Libre.</p>
 
-<!-- ─────────── UPLOADER ─────────── -->
 <section class="uploader">
   <h2>Nuevo lote</h2>
 
@@ -350,7 +339,6 @@
   </div>
 </section>
 
-<!-- ─────────── LIGHTBOX ─────────── -->
 <div class="lightbox-overlay" id="lightbox">
   <div class="lightbox-content">
     <div class="lightbox-image-wrap">
@@ -364,10 +352,8 @@
   </div>
 </div>
 
-<!-- Input oculto para el reemplazo de foto -->
 <input type="file" id="replace-input" accept="image/jpeg,image/png,image/webp" style="display:none">
 
-<!-- ─────────── HISTÓRICO ─────────── -->
 <section class="history">
   <h2>Mis lotes</h2>
   <div id="batches-list">
@@ -376,9 +362,6 @@
 </section>
 
 <script>
-// ───────────────────────────────────────────────────────────────
-// CONFIG
-// ───────────────────────────────────────────────────────────────
 const API_BASE = "";
 const POLL_INTERVAL_MS = 2000;
 const HISTORY_REFRESH_MS = 5000;
@@ -387,15 +370,10 @@ const PHOTOS_PER_PRODUCT = 3;
 const MAX_PRODUCTS = 50;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-// ───────────────────────────────────────────────────────────────
-// ESTADO DEL UPLOADER
-// ───────────────────────────────────────────────────────────────
 // pendingProducts = [{ id, photos: [{file, previewUrl, timestamp, hasExif}], price }]
 let pendingProducts = [];
 let nextProductId = 1;
-
-// Estado del lightbox: cuál foto se está mostrando
-let lightboxContext = null; // { productId, photoIdx }
+let lightboxContext = null;
 
 const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");
@@ -410,9 +388,6 @@ const lightboxClose = document.getElementById("lightbox-close");
 const lightboxReplace = document.getElementById("lightbox-replace");
 const replaceInput = document.getElementById("replace-input");
 
-// ───────────────────────────────────────────────────────────────
-// CARGA DE ARCHIVOS
-// ───────────────────────────────────────────────────────────────
 fileInput.addEventListener("change", e => {
   addFiles(e.target.files);
   fileInput.value = "";
@@ -431,10 +406,8 @@ dropZone.addEventListener("drop", e => {
 
 async function addFiles(fileList) {
   const incoming = Array.from(fileList).filter(f => f.type.startsWith("image/"));
-
   if (incoming.length === 0) return;
 
-  // Validación: múltiplo de 3
   if (incoming.length % PHOTOS_PER_PRODUCT !== 0) {
     const faltan = PHOTOS_PER_PRODUCT - (incoming.length % PHOTOS_PER_PRODUCT);
     alert(
@@ -446,7 +419,6 @@ async function addFiles(fileList) {
     return;
   }
 
-  // Validación: tamaño individual
   for (const file of incoming) {
     if (file.size > MAX_FILE_SIZE) {
       alert(`"${file.name}" supera 10MB.`);
@@ -454,36 +426,26 @@ async function addFiles(fileList) {
     }
   }
 
-  // Validación: tope de productos
   const productosNuevos = incoming.length / PHOTOS_PER_PRODUCT;
   if (pendingProducts.length + productosNuevos > MAX_PRODUCTS) {
     alert(`Máximo ${MAX_PRODUCTS} productos por lote.`);
     return;
   }
 
-  // Lectura de EXIF en paralelo
   const photosWithMeta = await Promise.all(incoming.map(async (file) => {
     let timestamp = null;
     let hasExif = true;
     try {
       const exif = await exifr.parse(file, ["DateTimeOriginal", "CreateDate", "DateTime"]);
       timestamp = exif?.DateTimeOriginal || exif?.CreateDate || exif?.DateTime || null;
-    } catch (e) {
-      // ignorar
-    }
+    } catch (e) {}
     if (!timestamp) {
       hasExif = false;
       timestamp = new Date(file.lastModified);
     }
-    return {
-      file,
-      previewUrl: URL.createObjectURL(file),
-      timestamp,
-      hasExif,
-    };
+    return { file, previewUrl: URL.createObjectURL(file), timestamp, hasExif };
   }));
 
-  // Aviso si alguna no tenía EXIF
   const sinExif = photosWithMeta.filter(p => !p.hasExif).length;
   if (sinExif > 0) {
     const seguir = confirm(
@@ -497,10 +459,8 @@ async function addFiles(fileList) {
     }
   }
 
-  // Ordenar cronológicamente
   photosWithMeta.sort((a, b) => a.timestamp - b.timestamp);
 
-  // Particionar en grupos de 3
   for (let i = 0; i < photosWithMeta.length; i += PHOTOS_PER_PRODUCT) {
     pendingProducts.push({
       id: nextProductId++,
@@ -512,9 +472,6 @@ async function addFiles(fileList) {
   renderCards();
 }
 
-// ───────────────────────────────────────────────────────────────
-// RENDER DE CARDS
-// ───────────────────────────────────────────────────────────────
 function renderCards() {
   cardsContainer.innerHTML = "";
 
@@ -549,7 +506,6 @@ function renderCards() {
 }
 
 function attachCardListeners() {
-  // Botón eliminar
   cardsContainer.querySelectorAll(".remove").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
@@ -557,7 +513,6 @@ function attachCardListeners() {
     });
   });
 
-  // Input de precio
   cardsContainer.querySelectorAll(".price").forEach(input => {
     input.addEventListener("input", () => {
       const id = parseInt(input.dataset.id);
@@ -567,7 +522,6 @@ function attachCardListeners() {
     });
   });
 
-  // Click en thumb → lightbox
   cardsContainer.querySelectorAll(".thumb").forEach(thumb => {
     thumb.addEventListener("click", e => {
       const productId = parseInt(thumb.dataset.productId);
@@ -595,10 +549,7 @@ function updateSubmitState() {
   submitBtn.textContent = count > 0 ? `Procesar lote (${count})` : "Procesar lote";
 }
 
-// ───────────────────────────────────────────────────────────────
-// DRAG & DROP ENTRE CARDS (SWAP)
-// ───────────────────────────────────────────────────────────────
-let dragSource = null; // { productId, photoIdx }
+let dragSource = null;
 
 function attachDragAndDropListeners() {
   cardsContainer.querySelectorAll(".thumb").forEach(thumb => {
@@ -609,7 +560,6 @@ function attachDragAndDropListeners() {
       };
       thumb.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
-      // Necesario para Firefox
       e.dataTransfer.setData("text/plain", "");
     });
 
@@ -623,7 +573,6 @@ function attachDragAndDropListeners() {
       if (!dragSource) return;
       const targetProductId = parseInt(thumb.dataset.productId);
       const targetPhotoIdx = parseInt(thumb.dataset.photoIdx);
-      // No marcar como drop-target a sí misma
       if (targetProductId === dragSource.productId && targetPhotoIdx === dragSource.photoIdx) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
@@ -642,7 +591,6 @@ function attachDragAndDropListeners() {
       const targetProductId = parseInt(thumb.dataset.productId);
       const targetPhotoIdx = parseInt(thumb.dataset.photoIdx);
 
-      // Si soltó sobre sí misma, no hacer nada
       if (targetProductId === dragSource.productId && targetPhotoIdx === dragSource.photoIdx) return;
 
       swapPhotos(dragSource, { productId: targetProductId, photoIdx: targetPhotoIdx });
@@ -664,9 +612,6 @@ function swapPhotos(source, target) {
   renderCards();
 }
 
-// ───────────────────────────────────────────────────────────────
-// LIGHTBOX + REEMPLAZO DE FOTO
-// ───────────────────────────────────────────────────────────────
 function openLightbox(productId, photoIdx) {
   const product = pendingProducts.find(p => p.id === productId);
   if (!product) return;
@@ -701,19 +646,16 @@ function closeLightbox() {
 
 lightboxClose.addEventListener("click", closeLightbox);
 
-// Cerrar lightbox al click en overlay (pero no en el contenido)
 lightboxEl.addEventListener("click", e => {
   if (e.target === lightboxEl) closeLightbox();
 });
 
-// Cerrar con Escape
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && lightboxEl.classList.contains("active")) {
     closeLightbox();
   }
 });
 
-// Botón "Reemplazar foto"
 lightboxReplace.addEventListener("click", () => {
   if (!lightboxContext) return;
   replaceInput.click();
@@ -721,7 +663,7 @@ lightboxReplace.addEventListener("click", () => {
 
 replaceInput.addEventListener("change", async e => {
   const file = e.target.files[0];
-  replaceInput.value = ""; // permite re-seleccionar el mismo archivo después
+  replaceInput.value = "";
 
   if (!file || !lightboxContext) return;
   if (!file.type.startsWith("image/")) {
@@ -736,25 +678,20 @@ replaceInput.addEventListener("change", async e => {
   const product = pendingProducts.find(p => p.id === lightboxContext.productId);
   if (!product) return;
 
-  // Leer EXIF de la nueva foto
   let timestamp = null;
   let hasExif = true;
   try {
     const exif = await exifr.parse(file, ["DateTimeOriginal", "CreateDate", "DateTime"]);
     timestamp = exif?.DateTimeOriginal || exif?.CreateDate || exif?.DateTime || null;
-  } catch (e) {
-    // ignorar
-  }
+  } catch (e) {}
   if (!timestamp) {
     hasExif = false;
     timestamp = new Date(file.lastModified);
   }
 
-  // Liberar URL de la foto vieja
   const oldPhoto = product.photos[lightboxContext.photoIdx];
   if (oldPhoto) URL.revokeObjectURL(oldPhoto.previewUrl);
 
-  // Reemplazar
   product.photos[lightboxContext.photoIdx] = {
     file,
     previewUrl: URL.createObjectURL(file),
@@ -762,7 +699,6 @@ replaceInput.addEventListener("change", async e => {
     hasExif,
   };
 
-  // Actualizar lightbox con la nueva foto
   const newPhoto = product.photos[lightboxContext.photoIdx];
   lightboxImg.src = newPhoto.previewUrl;
   const date = newPhoto.timestamp instanceof Date
@@ -779,29 +715,60 @@ replaceInput.addEventListener("change", async e => {
     ${isCover ? ' · <span style="color:#2b6cb0;font-weight:600">PORTADA</span>' : ''}
   `;
 
-  // Re-renderizar cards (la miniatura cambia)
   renderCards();
 });
 
 // ───────────────────────────────────────────────────────────────
-// SUBMIT BATCH (todavía formato VIEJO; se actualiza en Etapa 4)
+// SUBMIT BATCH (multi-foto: photo_0, photo_1, ...)
 // ───────────────────────────────────────────────────────────────
 submitBtn.addEventListener("click", async () => {
   if (pendingProducts.length === 0) return;
 
-  // ⚠️ TODO Etapa 4: armar FormData con campos photo_N agrupados.
-  // Por ahora, este submit NO va a funcionar contra el backend actual.
-  // Se deja para que el flujo visual sea testeable end-to-end del frontend.
-  alert(
-    "El envío al backend todavía no está implementado para multi-foto.\n\n" +
-    "El frontend ya agrupa correctamente — falta adaptar el armado del FormData (Etapa 4) " +
-    "y el endpoint backend (Etapa 5)."
-  );
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Enviando...";
+
+  try {
+    const formData = new FormData();
+    const prices = [];
+
+    pendingProducts.forEach((product, idx) => {
+      product.photos.forEach(photo => {
+        formData.append(`photo_${idx}`, photo.file);
+      });
+      prices.push(parseFloat(product.price));
+    });
+
+    formData.append("prices", JSON.stringify(prices));
+
+    const resp = await fetch(`${API_BASE}/api/publish/batch-form`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+
+    console.log("Batch creado:", data);
+
+    for (const product of pendingProducts) {
+      product.photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+    }
+    pendingProducts = [];
+    renderCards();
+
+    refreshHistory();
+
+  } catch (err) {
+    alert(`Error al enviar el lote: ${err.message}`);
+    console.error(err);
+  } finally {
+    submitBtn.textContent = "Procesar lote";
+    updateSubmitState();
+  }
 });
 
-// ───────────────────────────────────────────────────────────────
-// HISTÓRICO (sin cambios respecto al original)
-// ───────────────────────────────────────────────────────────────
 const expandedBatches = new Set();
 const detailCache = new Map();
 
@@ -958,9 +925,6 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
-// ───────────────────────────────────────────────────────────────
-// POLLING
-// ───────────────────────────────────────────────────────────────
 refreshHistory();
 setInterval(refreshHistory, HISTORY_REFRESH_MS);
 
