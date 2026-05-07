@@ -12,28 +12,6 @@ const generateCodeChallenge = (verifier) =>
 
 let tokens = {};
 
-/**
- * Genera un GTIN-13 único con checksum válido para uso interno.
- * Prefijo "200" según GS1 = código para uso interno del comercio (legítimo).
- * El restante usa timestamp para garantizar unicidad por publicación.
- *
- * Movido arriba del archivo para que sea accesible desde todas las funciones
- * de publicación (action_figure, collectible_decor, etc).
- */
-const generateInternalGtin = () => {
-  // 12 dígitos: "200" + últimos 9 del timestamp
-  const base = "200" + Date.now().toString().slice(-9);
-
-  // Calcular dígito de checksum (algoritmo EAN-13 estándar)
-  let sum = 0;
-  for (let i = 0; i < base.length; i++) {
-    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
-  }
-  const check = (10 - (sum % 10)) % 10;
-
-  return base + check; // 13 dígitos totales
-};
-
 export const loadTokensFromDB = async () => {
   try {
     const result = await pool.query(
@@ -731,16 +709,10 @@ export const publishProductAsFreeListing = async (
   if (visionCommon.approx_width_cm) addIfMissing({ id: "WIDTH", value_name: `${visionCommon.approx_width_cm} cm` });
   if (visionCommon.approx_depth_cm) addIfMissing({ id: "DEPTH", value_name: `${visionCommon.approx_depth_cm} cm` });
 
-  // Edad recomendada — ML exige unidad válida (años, meses, etc.)
-  // Si Vision devuelve solo "3", agregamos "años" como unidad por default.
+  // Edad recomendada
   if (visionAF.recommended_age) {
-    const ageValue = String(visionAF.recommended_age);
-    // Si ya viene con unidad (ej: "3 años") lo mandamos tal cual; si no, agregamos "años"
-    const ageWithUnit = /\d+\s*(años|meses|días|semanas|h|m|s)/i.test(ageValue)
-      ? ageValue
-      : `${ageValue} años`;
-    addIfMissing({ id: "MIN_AGE_RECOMMENDED", value_name: ageWithUnit });
-    addIfMissing({ id: "RECOMMENDED_AGE", value_name: ageWithUnit });
+    addIfMissing({ id: "MIN_AGE_RECOMMENDED", value_name: String(visionAF.recommended_age) });
+    addIfMissing({ id: "RECOMMENDED_AGE", value_name: String(visionAF.recommended_age) });
   }
 
   // Booleanos detectados con certeza → "Sí" o "No"
@@ -787,17 +759,8 @@ export const publishProductAsFreeListing = async (
   // Si Vision no detectó franchise, mandamos "Otra" para no bloquear publicación.
   addIfMissing({ id: "COLLECTION", value_name: "Otra" });
 
-  // GTIN: ML cambió las reglas y ahora MLA3422 exige GTIN real obligatorio.
-  // Si el usuario lo proveyó, usarlo. Si no, generar uno interno con prefijo "200" (uso comercial GS1).
-  // Mismo patrón que collectible_decor.
-  const userGtinForFigure = visionResult?.user_provided_gtin;
-  if (userGtinForFigure) {
-    addIfMissing({ id: "GTIN", value_name: String(userGtinForFigure) });
-  } else {
-    addIfMissing({ id: "GTIN", value_name: generateInternalGtin() });
-  }
-
-  // Otros obligatorios con value_id conocidos (de debug)
+  // Obligatorios con value_id conocidos (de debug)
+  addIfMissing({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });  // "El producto no tiene código registrado"
   addIfMissing({ id: "VALUE_ADDED_TAX", value_id: "48405909" });     // "21 %"
   addIfMissing({ id: "IMPORT_DUTY", value_id: "49553239" });          // "0 %"
 
@@ -1960,6 +1923,24 @@ const resolveDecorMaterial = (visionResult) => {
  * VALUE_ADDED_TAX, IMPORT_DUTY.
  */
 
+/**
+ * Genera un GTIN-13 único con checksum válido para uso interno.
+ * Prefijo "200" según GS1 = código para uso interno del comercio (legítimo).
+ * El restante usa timestamp para garantizar unicidad por publicación.
+ */
+const generateInternalGtin = () => {
+  // 12 dígitos: "200" + últimos 9 del timestamp
+  const base = "200" + Date.now().toString().slice(-9);
+  
+  // Calcular dígito de checksum (algoritmo EAN-13 estándar)
+  let sum = 0;
+  for (let i = 0; i < base.length; i++) {
+    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const check = (10 - (sum % 10)) % 10;
+  
+  return base + check; // 13 dígitos totales
+};
 const buildCollectibleDecorAttributes = (visionResult) => {
   const cd = visionResult?.collectible_decor || {};
   const visionCommon = visionResult?.common || {};
