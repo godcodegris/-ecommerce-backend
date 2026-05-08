@@ -270,7 +270,13 @@ export const analyzeImageWithVision = async (imageBuffer, mimeType) => {
     body: JSON.stringify({
       model: CLAUDE_MODEL,
       max_tokens: 1800,
-      system: SYSTEM_PROMPT,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: [
         {
           role: "user",
@@ -294,6 +300,8 @@ export const analyzeImageWithVision = async (imageBuffer, mimeType) => {
   });
 
   const data = await response.json();
+
+  console.log("[Vision usage]", data.usage);
 
   if (data.type === "error") {
     throw new Error(`Claude API: ${data.error?.message || "error desconocido"}`);
