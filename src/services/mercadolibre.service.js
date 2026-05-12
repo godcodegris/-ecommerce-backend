@@ -274,10 +274,10 @@ const calcularSimilitud = (str1, str2) => {
   const coincidencias = words1.filter(word => s2.includes(word)).length;
   return coincidencias / words1.length;
 };
+
 // Extrae el número de Pop al final del nombre del catalog_product de ML.
 // Ejemplos: "Funko Pop Donald Duck 1494" -> "1494"
 //           "Funko Pop! Regan The Exorcist #203" -> "203"
-//           "Funko Pop Sin Numero" -> null
 const extraerNumeroPop = (nombre) => {
   if (!nombre) return null;
   const match = String(nombre).match(/#?(\d{2,5})\s*$/);
