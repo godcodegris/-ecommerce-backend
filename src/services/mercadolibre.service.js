@@ -274,6 +274,23 @@ const calcularSimilitud = (str1, str2) => {
   const coincidencias = words1.filter(word => s2.includes(word)).length;
   return coincidencias / words1.length;
 };
+// Extrae el número de Pop al final del nombre del catalog_product de ML.
+// Ejemplos: "Funko Pop Donald Duck 1494" -> "1494"
+//           "Funko Pop! Regan The Exorcist #203" -> "203"
+//           "Funko Pop Sin Numero" -> null
+const extraerNumeroPop = (nombre) => {
+  if (!nombre) return null;
+  const match = String(nombre).match(/#?(\d{2,5})\s*$/);
+  return match ? match[1] : null;
+};
+
+// Normaliza un identificador a solo dígitos. "#1191" -> "1191", "Pop! 1191" -> "1191"
+const normalizarNumero = (valor) => {
+  if (!valor) return null;
+  const soloDigitos = String(valor).replace(/\D/g, "");
+  return soloDigitos.length > 0 ? soloDigitos : null;
+};
+
 export const publishProductFromJSON = async (productData, visionResult = null) => {
   const token = await getValidToken();
   
@@ -297,22 +314,48 @@ export const publishProductFromJSON = async (productData, visionResult = null) =
 
       // Aplicar reglas estrictas
       // Aliases por bloque del schema (estilo opción B, consistente con vision.routes.js)
-      const visionAF = visionResult?.action_figure || {};
+     const visionAF = visionResult?.action_figure || {};
 
       const cumpleSimilitud = similitud >= UMBRAL_SIMILITUD;
       const cumpleConfidence = !visionResult || visionResult.type_confidence >= MIN_VISION_CONFIDENCE;
       const tieneIdentificador = !visionResult || !REQUIERE_BRAND_O_MODEL ||
         (visionAF.manufacturer || visionAF.alphanumeric_model);
 
-      if (cumpleSimilitud && cumpleConfidence && tieneIdentificador) {
+      // === Filtro nuevo: validar número de Pop en Funkos ===
+      // Solo aplica si Vision detectó manufacturer Funko. Para otras marcas no aplica.
+      const esFunko = visionAF.manufacturer && /funko/i.test(visionAF.manufacturer);
+      let cumpleNumeroPop = true;
+      let detalleNumero = null;
+
+      if (esFunko) {
+        const numeroVision = normalizarNumero(visionAF.alphanumeric_model);
+        const numeroCatalogo = normalizarNumero(extraerNumeroPop(searchResult.name));
+
+        if (!numeroVision) {
+          cumpleNumeroPop = false;
+          detalleNumero = "Vision no detectó número de Pop";
+        } else if (!numeroCatalogo) {
+          cumpleNumeroPop = false;
+          detalleNumero = `catálogo "${searchResult.name}" no tiene número parseable`;
+        } else if (numeroVision !== numeroCatalogo) {
+          cumpleNumeroPop = false;
+          detalleNumero = `Vision=${numeroVision} vs catálogo=${numeroCatalogo}`;
+        } else {
+          detalleNumero = `números coinciden (${numeroVision})`;
+        }
+
+        console.log(`[publishProductFromJSON] Validación número Pop: ${detalleNumero}`);
+      }
+
+      if (cumpleSimilitud && cumpleConfidence && tieneIdentificador && cumpleNumeroPop) {
         catalogMatch = searchResult;
         console.log(`[publishProductFromJSON] ✅ Match de catálogo aceptado`);
       } else {
-        // Armar motivo de rechazo para debug/logging
         const razones = [];
         if (!cumpleSimilitud) razones.push(`similitud ${similitud.toFixed(2)} < ${UMBRAL_SIMILITUD}`);
         if (!cumpleConfidence) razones.push(`vision confidence ${visionResult.type_confidence} < ${MIN_VISION_CONFIDENCE}`);
         if (!tieneIdentificador) razones.push(`sin manufacturer ni alphanumeric_model`);
+        if (!cumpleNumeroPop) razones.push(`número Pop no coincide: ${detalleNumero}`);
         rechazoMotivo = razones.join(" | ");
         console.log(`[publishProductFromJSON] ❌ Match rechazado: ${rechazoMotivo}`);
       }
