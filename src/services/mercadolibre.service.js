@@ -722,16 +722,11 @@ export const publishProductAsFreeListing = async (
     }
   };
 
-  // Completar con Vision SOLO si Vision realmente detectó algo (no null)
-  // Excepción: si el producto viene loose (sin caja), NO confiamos en la marca
-  // porque no podemos verificar autenticidad. Mandamos "Sin marca" para evitar
-  // que ML exija GTIN obligatorio (lo activan ciertas marcas conocidas).
-  const isLoose = visionCommon.package_condition === "loose";
-  if (visionAF.manufacturer && !isLoose) {
-    addIfMissing({ id: "BRAND", value_name: visionAF.manufacturer });
-  } else if (isLoose && visionAF.manufacturer) {
-    console.log(`[publishAsFreeListing] ℹ️ Producto loose, ignorando manufacturer="${visionAF.manufacturer}" detectado por Vision (evita exigencia de GTIN)`);
+  // TEST 2 — diagnóstico: forzar BRAND="Genérica" sin importar manufacturer
+  if (visionAF.manufacturer) {
+    console.log(`[publishAsFreeListing] 🔬 TEST 2: ignorando manufacturer detectado="${visionAF.manufacturer}", forzando BRAND="Genérica"`);
   }
+  attributesMap.set("BRAND", { id: "BRAND", value_name: "Genérica" });
 
   if (visionAF.alphanumeric_model) {
     addIfMissing({ id: "MODEL", value_name: visionAF.alphanumeric_model });
