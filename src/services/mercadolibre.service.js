@@ -754,8 +754,7 @@ export const publishProductAsFreeListing = async (
 
   // Edad recomendada
   if (visionAF.recommended_age) {
-    addIfMissing({ id: "MIN_AGE_RECOMMENDED", value_name: String(visionAF.recommended_age) });
-    addIfMissing({ id: "RECOMMENDED_AGE", value_name: String(visionAF.recommended_age) });
+    addIfMissing({ id: "MIN_RECOMMENDED_AGE", value_name: `${visionAF.recommended_age} años` });
   }
 
   // Booleanos detectados con certeza → "Sí" o "No"
@@ -763,8 +762,8 @@ export const publishProductAsFreeListing = async (
   if (visionAF.is_articulated === true) addIfMissing({ id: "IS_ARTICULATED", value_name: "Sí" });
   else if (visionAF.is_articulated === false) addIfMissing({ id: "IS_ARTICULATED", value_name: "No" });
 
-  if (visionAF.is_bobblehead === true) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "Sí" });
-  else if (visionAF.is_bobblehead === false) addIfMissing({ id: "IS_BOBBLE_HEAD", value_name: "No" });
+  if (visionAF.is_bobblehead === true) addIfMissing({ id: "IS_BOBBLEHEAD", value_name: "Sí" });
+  else if (visionAF.is_bobblehead === false) addIfMissing({ id: "IS_BOBBLEHEAD", value_name: "No" });
 
   if (visionAF.has_remote_control === true) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "Sí" });
   else if (visionAF.has_remote_control === false) addIfMissing({ id: "WITH_REMOTE_CONTROL", value_name: "No" });
@@ -772,8 +771,8 @@ export const publishProductAsFreeListing = async (
   if (visionAF.includes_accessories === true) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "Sí" });
   else if (visionAF.includes_accessories === false) addIfMissing({ id: "INCLUDES_ACCESSORIES", value_name: "No" });
 
-  if (visionAF.has_interchangeable_parts === true) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "Sí" });
-  else if (visionAF.has_interchangeable_parts === false) addIfMissing({ id: "WITH_INTERCHANGEABLE_PARTS", value_name: "No" });
+  if (visionAF.has_interchangeable_parts === true) addIfMissing({ id: "WITH_INTERCHANGEABLE_PIECES", value_name: "Sí" });
+  else if (visionAF.has_interchangeable_parts === false) addIfMissing({ id: "WITH_INTERCHANGEABLE_PIECES", value_name: "No" });
 
   if (visionAF.has_lights === true) addIfMissing({ id: "WITH_LIGHTS", value_name: "Sí" });
   else if (visionAF.has_lights === false) addIfMissing({ id: "WITH_LIGHTS", value_name: "No" });
@@ -783,7 +782,7 @@ export const publishProductAsFreeListing = async (
 
   // Texto libre solo si Vision detectó
   if (visionAF.scale) addIfMissing({ id: "SCALE", value_name: visionAF.scale });
-  if (visionAF.play_type) addIfMissing({ id: "PLAY_TYPE", value_name: visionAF.play_type });
+  if (visionAF.play_type) addIfMissing({ id: "ACTION_FIGURE_GAME_TYPE", value_name: visionAF.play_type });
   if (visionAF.power_type) addIfMissing({ id: "POWER_TYPE", value_name: visionAF.power_type });
 
   // Año de fabricación
