@@ -859,18 +859,49 @@ export const publishProductAsFreeListing = async (
   console.log("[publishAsFreeListing] PAYLOAD enviado:", JSON.stringify(item, null, 2));
 
   // ========================================================================
-  // 5. Publicar
+  // 5. Publicar — con reintento condicional si ML exige GTIN (cause_id 7810)
   // ========================================================================
-  const response = await fetch(`${ML_BASE}/items`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(item),
-  });
+  // Helper local para hacer el POST a /items con el body actual de `item`
+  const postItem = async () => {
+    const resp = await fetch(`${ML_BASE}/items`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(item),
+    });
+    return { resp, payload: await resp.json() };
+  };
 
-  const data = await response.json();
+  let { resp: response, payload: data } = await postItem();
+
+  // ---- Reintento si ML rebota con cause_id 7810 (falta GTIN por BRAND conocido) ----
+  const has7810 = Array.isArray(data?.cause) && data.cause.some(c => c.cause_id === 7810);
+  const currentBrandAttr = item.attributes.find(a => a.id === "BRAND");
+  const currentBrand = currentBrandAttr?.value_name;
+  const isMLA3422 = categoryId === "MLA3422";
+
+  if (has7810 && isMLA3422 && currentBrand && currentBrand !== "Genérica") {
+    console.warn(`[publishAsFreeListing] ⚠️ 1er intento rechazado por 7810. Reintentando sin BRAND real (era "${currentBrand}")...`);
+
+    // Reemplazar BRAND por "Genérica" y sacar MANUFACTURER si está
+    item.attributes = item.attributes
+      .filter(a => a.id !== "MANUFACTURER")
+      .map(a => a.id === "BRAND" ? { id: "BRAND", value_name: "Genérica" } : a);
+
+    console.log(`[publishAsFreeListing] 🔄 2do intento con BRAND="Genérica"`);
+
+    const retry = await postItem();
+    response = retry.resp;
+    data = retry.payload;
+
+    if (response.ok && !data.error) {
+      console.log(`[publishAsFreeListing] ✅ Publicado en 2do intento: ${data.id} (BRAND=Genérica, manufacturer real era "${currentBrand}")`);
+    } else {
+      console.error(`[publishAsFreeListing] ❌ 2do intento también rechazado. Devolviendo error real.`);
+    }
+  }
 
   if (!response.ok || data.error) {
     console.error(`[publishAsFreeListing] ❌ ML rechazó. Consultando atributos obligatorios de ${categoryId}...`);
