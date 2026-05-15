@@ -1372,11 +1372,21 @@ const buildTradingCardAttributes = (visionResult) => {
   else if (tc.is_foil === false) attrs.push({ id: "IS_FOIL_CARD", value_name: "No" });
   if (tc.card_name) attrs.push({ id: "TRADING_CARD_NAME", value_name: tc.card_name });
 
-  // Dimensiones de paquete (defaults para carta TCG individual)
+ // Dimensiones de paquete (defaults para carta TCG individual)
   attrs.push({ id: "SELLER_PACKAGE_HEIGHT", value_name: "1 cm" });
   attrs.push({ id: "SELLER_PACKAGE_WIDTH", value_name: "7 cm" });
   attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "10 cm" });
   attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "20 g" });
+
+  // Atributos obligatorios extra para football (MLA1965 - Figuritas y Cromos)
+  if (tc.card_subtype === "football") {
+    // ALBUM_NAME: si Vision identificó set_name, usarlo; si no, fallback genérico.
+    const albumName = tc.set_name || "Álbum coleccionable";
+    attrs.push({ id: "ALBUM_NAME", value_name: albumName });
+
+    // SALE_FORMAT: 1359391 = "Unidad", 1359392 = "Pack". Cartas sueltas = Unidad.
+    attrs.push({ id: "SALE_FORMAT", value_id: "1359391" });
+  }
 
   return attrs;
 };
