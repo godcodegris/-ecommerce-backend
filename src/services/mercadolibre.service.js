@@ -1378,7 +1378,7 @@ const buildTradingCardAttributes = (visionResult) => {
   attrs.push({ id: "SELLER_PACKAGE_LENGTH", value_name: "10 cm" });
   attrs.push({ id: "SELLER_PACKAGE_WEIGHT", value_name: "20 g" });
 
-  // Atributos obligatorios extra para football (MLA1965 - Figuritas y Cromos)
+ // Atributos obligatorios extra para football (MLA1965 - Figuritas y Cromos)
   if (tc.card_subtype === "football") {
     // ALBUM_NAME: si Vision identificó set_name, usarlo; si no, fallback genérico.
     const albumName = tc.set_name || "Álbum coleccionable";
@@ -1386,8 +1386,10 @@ const buildTradingCardAttributes = (visionResult) => {
 
     // SALE_FORMAT: 1359391 = "Unidad", 1359392 = "Pack". Cartas sueltas = Unidad.
     attrs.push({ id: "SALE_FORMAT", value_id: "1359391" });
-  }
 
+    // UNITS_PER_PACK: requerido cuando SALE_FORMAT=Unidad. Siempre 1 para cartas sueltas.
+    attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
+  }
   return attrs;
 };
 
