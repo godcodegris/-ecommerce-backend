@@ -1304,14 +1304,11 @@ const buildComicAttributes = (visionResult) => {
   return attrs;
 };
 /**
- * Construye los atributos de ML para una carta TCG (MLA3390).
- * Atributos requeridos: BRAND, CARD_DECKS_NUMBER, GTIN, EMPTY_GTIN_REASON,
- * VALUE_ADDED_TAX, IMPORT_DUTY.
  * Genera un GTIN-13 único con checksum válido para uso interno.
  * Prefijo "200" según GS1 = código para uso interno del comercio (legítimo).
  * El restante usa timestamp para garantizar unicidad por publicación.
  */
-  = () => {
+const generateInternalGtin = () => {
   // 12 dígitos: "200" + últimos 9 del timestamp
   const base = "200" + Date.now().toString().slice(-9);
   
@@ -1325,6 +1322,11 @@ const buildComicAttributes = (visionResult) => {
   return base + check; // 13 dígitos totales
 };
 
+/**
+ * Construye los atributos de ML para una carta TCG (MLA3390).
+ * Atributos requeridos: BRAND, CARD_DECKS_NUMBER, GTIN, EMPTY_GTIN_REASON,
+ * VALUE_ADDED_TAX, IMPORT_DUTY.
+ */
 const buildTradingCardAttributes = (visionResult) => {
   const tc = visionResult?.trading_cards || {};
   const attrs = [];
