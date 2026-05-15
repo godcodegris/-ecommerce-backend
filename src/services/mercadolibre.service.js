@@ -1307,7 +1307,24 @@ const buildComicAttributes = (visionResult) => {
  * Construye los atributos de ML para una carta TCG (MLA3390).
  * Atributos requeridos: BRAND, CARD_DECKS_NUMBER, GTIN, EMPTY_GTIN_REASON,
  * VALUE_ADDED_TAX, IMPORT_DUTY.
+ * Genera un GTIN-13 único con checksum válido para uso interno.
+ * Prefijo "200" según GS1 = código para uso interno del comercio (legítimo).
+ * El restante usa timestamp para garantizar unicidad por publicación.
  */
+  = () => {
+  // 12 dígitos: "200" + últimos 9 del timestamp
+  const base = "200" + Date.now().toString().slice(-9);
+  
+  // Calcular dígito de checksum (algoritmo EAN-13 estándar)
+  let sum = 0;
+  for (let i = 0; i < base.length; i++) {
+    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const check = (10 - (sum % 10)) % 10;
+  
+  return base + check; // 13 dígitos totales
+};
+
 const buildTradingCardAttributes = (visionResult) => {
   const tc = visionResult?.trading_cards || {};
   const attrs = [];
@@ -1335,7 +1352,9 @@ const buildTradingCardAttributes = (visionResult) => {
   if (isPack && userGtin) {
     attrs.push({ id: "GTIN", value_name: String(userGtin) });
   } else if (isPack && !userGtin) {
-    throw new Error("PACK_REQUIRES_GTIN");
+    
+    console.log("[buildTradingCardAttributes] Pack sin user_provided_gtin → generando GTIN interno");
+    attrs.push({ id: "GTIN", value_name: generateInternalGtin() });
   } else {
     attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
   }
@@ -1997,23 +2016,7 @@ const resolveDecorMaterial = (visionResult) => {
  */
 
 /**
- * Genera un GTIN-13 único con checksum válido para uso interno.
- * Prefijo "200" según GS1 = código para uso interno del comercio (legítimo).
- * El restante usa timestamp para garantizar unicidad por publicación.
- */
-const generateInternalGtin = () => {
-  // 12 dígitos: "200" + últimos 9 del timestamp
-  const base = "200" + Date.now().toString().slice(-9);
-  
-  // Calcular dígito de checksum (algoritmo EAN-13 estándar)
-  let sum = 0;
-  for (let i = 0; i < base.length; i++) {
-    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
-  }
-  const check = (10 - (sum % 10)) % 10;
-  
-  return base + check; // 13 dígitos totales
-};
+
 const buildCollectibleDecorAttributes = (visionResult) => {
   const cd = visionResult?.collectible_decor || {};
   const visionCommon = visionResult?.common || {};
