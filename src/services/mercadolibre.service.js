@@ -1191,6 +1191,7 @@ export const uploadImageToML = async (imageBuffer, mimetype = "image/jpeg") => {
 
 const COMIC_CATEGORY_ID = "MLA1955"; // Revistas — bucket donde ML mete cómics
 const TRADING_CARDS_CATEGORY_ID = "MLA3390";
+const FOOTBALL_STICKER_CATEGORY_ID = "MLA1965";
 const DIECAST_CATEGORY_ID = "MLA3398";
 
 // Mapping de marcas conocidas de die-cast al value_id del enum de ML.
@@ -1630,9 +1631,25 @@ export const publishTradingCardAsFreeListing = async (productData, images, visio
   }
 
 const tc = visionResult?.trading_cards || {};
-  if (!tc.brand) {
+
+  // Validación de brand: estricta para TCG (donde brand confiable importa por Opción B / cause_id 7810),
+  // permisiva para football/entertainment (donde la marca puede no ser visible y preferimos publicar
+  // con "Genérica" antes que perder la pieza).
+  const isNonTCG = tc.card_subtype === "football" || tc.card_subtype === "entertainment";
+
+  if (!tc.brand && !isNonTCG) {
     throw new Error("Trading card sin brand identificada — debería haber ido a revisión manual");
   }
+
+  if (!tc.brand && isNonTCG) {
+    console.warn(`[publishTradingCardAsFreeListing] ⚠️ ${tc.card_subtype} sin brand identificada — usando "Genérica"`);
+    tc.brand = "Genérica";
+  }
+
+  // Routing de categoría según subtipo: football → MLA1965 (Figuritas y Cromos), resto → MLA3390.
+  const categoryId = tc.card_subtype === "football"
+    ? FOOTBALL_STICKER_CATEGORY_ID
+    : TRADING_CARDS_CATEGORY_ID;
 
   // Propagar gtin del productData al visionResult para que buildTradingCardAttributes lo use
   if (productData?.gtin) {
@@ -1643,7 +1660,7 @@ const tc = visionResult?.trading_cards || {};
   const visionCommon = visionResult?.common || {};
   const uniqueId = Date.now().toString().slice(-5);
 
-  console.log(`[publishTradingCardAsFreeListing] Categoría forzada: ${TRADING_CARDS_CATEGORY_ID} (Cartas TCG)`);
+console.log(`[publishTradingCardAsFreeListing] Categoría: ${categoryId} (subtype=${tc.card_subtype || "tcg_single"})`);
 
   // 1. Subir fotos
   console.log(`[publishTradingCardAsFreeListing] Subiendo ${images.length} foto(s)...`);
@@ -1670,28 +1687,88 @@ const tc = visionResult?.trading_cards || {};
   // 2. Atributos
   const attributes = buildTradingCardAttributes(visionResult);
 
-  // 3. family_name único
-  const baseFamily = `${tc.brand} ${tc.card_name || "Carta TCG"}`;
-  const setBit = tc.set_name ? ` ${tc.set_name}` : "";
-  const familyName = `${baseFamily}${setBit} #${uniqueId}`;
+  // 3. family_name único — varía por subtipo para mejor SEO en cada categoría
+  const buildBaseFamily = () => {
+    const subtype = tc.card_subtype || "tcg_single";
 
-  console.log(`[publishTradingCardAsFreeListing] family_name: "${familyName}"`);
+    if (subtype === "tcg_sealed") {
+      // Incluye palabra "Sobre" para SEO + cantidad de cartas
+      const cardsInfo = tc.units_per_pack && tc.units_per_pack > 1
+        ? ` ${tc.units_per_pack} cartas`
+        : "";
+      const setBit = tc.set_name ? ` ${tc.set_name}` : "";
+      return `${tc.brand} Sobre${setBit}${cardsInfo}`;
+    }
+
+    if (subtype === "football") {
+      // [Brand] [Jugador] [Equipo] [Año]
+      const parts = [tc.brand];
+      if (tc.player_or_subject) parts.push(tc.player_or_subject);
+      if (tc.team_or_group) parts.push(tc.team_or_group);
+      if (tc.year) parts.push(String(tc.year));
+      return parts.join(" ");
+    }
+
+    if (subtype === "entertainment") {
+      // [Brand] [Franchise] [Card Name] [Año]
+      const parts = [tc.brand];
+      if (tc.franchise) parts.push(tc.franchise);
+      if (tc.card_name) parts.push(tc.card_name);
+      if (tc.year) parts.push(String(tc.year));
+      return parts.join(" ");
+    }
+
+    // Default: tcg_single (mantiene fórmula original)
+    const setBit = tc.set_name ? ` ${tc.set_name}` : "";
+    return `${tc.brand} ${tc.card_name || "Carta TCG"}${setBit}`;
+  };
+
+  const familyName = `${buildBaseFamily()} #${uniqueId}`;
+
+  console.log(`[publishTradingCardAsFreeListing] family_name: "${familyName}" (subtype=${tc.card_subtype || "tcg_single"})`);
 
   // 4. Descripción
   const descriptionParts = [];
   if (visionCommon.description) {
     descriptionParts.push(visionCommon.description);
   } else {
-    descriptionParts.push(`Carta coleccionable de ${tc.brand}.`);
+    descriptionParts.push(
+      tc.card_subtype === "tcg_sealed"
+        ? `Sobre sellado de ${tc.brand}.`
+        : `Carta coleccionable de ${tc.brand}.`
+    );
   }
 
   const techLines = [];
+  const subtype = tc.card_subtype || "tcg_single";
+
+  // Campos comunes a todos los subtipos
   if (tc.brand) techLines.push(`Marca: ${tc.brand}`);
-  if (tc.card_name) techLines.push(`Carta: ${tc.card_name}`);
-  if (tc.set_name) techLines.push(`Set/Expansión: ${tc.set_name}`);
+
+  // Campos específicos por subtipo
+  if (subtype === "tcg_single") {
+    if (tc.card_name) techLines.push(`Carta: ${tc.card_name}`);
+    if (tc.set_name) techLines.push(`Set/Expansión: ${tc.set_name}`);
+    if (tc.is_foil === true) techLines.push(`Foil: Sí`);
+  } else if (subtype === "tcg_sealed") {
+    if (tc.set_name) techLines.push(`Set/Expansión: ${tc.set_name}`);
+    if (tc.units_per_pack && tc.units_per_pack > 1) techLines.push(`Cantidad: ${tc.units_per_pack} cartas`);
+  } else if (subtype === "football") {
+    if (tc.player_or_subject) techLines.push(`Jugador: ${tc.player_or_subject}`);
+    if (tc.team_or_group) techLines.push(`Equipo/Selección: ${tc.team_or_group}`);
+    if (tc.set_name) techLines.push(`Set/Álbum: ${tc.set_name}`);
+    if (tc.year) techLines.push(`Año: ${tc.year}`);
+    if (tc.card_number) techLines.push(`Número: ${tc.card_number}`);
+  } else if (subtype === "entertainment") {
+    if (tc.franchise) techLines.push(`Serie/Película: ${tc.franchise}`);
+    if (tc.card_name) techLines.push(`Personaje/Episodio: ${tc.card_name}`);
+    if (tc.set_name) techLines.push(`Set: ${tc.set_name}`);
+    if (tc.year) techLines.push(`Año: ${tc.year}`);
+    if (tc.card_number) techLines.push(`Número: ${tc.card_number}`);
+  }
+
+  // Idioma al final, común a todos
   if (tc.language) techLines.push(`Idioma: ${tc.language}`);
-  if (tc.is_foil === true) techLines.push(`Foil: Sí`);
-  if (tc.units_per_pack && tc.units_per_pack > 1) techLines.push(`Cantidad: ${tc.units_per_pack} cartas`);
 
   if (techLines.length > 0) {
     descriptionParts.push("\n--- DETALLES ---\n" + techLines.join("\n"));
@@ -1708,7 +1785,7 @@ const tc = visionResult?.trading_cards || {};
   // 5. Payload
   const item = {
     family_name: familyName,
-    category_id: TRADING_CARDS_CATEGORY_ID,
+    category_id: categoryId,
     price: productData.price,
     currency_id: "ARS",
     available_quantity: productData.stock || 1,
@@ -1772,7 +1849,7 @@ const tc = visionResult?.trading_cards || {};
   return {
     ...data,
     publication_type: "free_listing",
-    category_id: TRADING_CARDS_CATEGORY_ID,
+    category_id: categoryId,
     item_type: "trading_cards",
   };
 };

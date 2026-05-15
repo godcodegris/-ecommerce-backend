@@ -37,7 +37,7 @@ Elegí EXACTAMENTE UNO:
 
 - "comic": cómics, revistas, mangas, historietas. Single issues en grapa, TPB o tapa dura. Tienen portada con título e ilustración y páginas internas. Muchos vienen en bolsa mylar con backing board — eso sigue siendo cómic.
 
-- "trading_cards": cartas individuales de TCG. SOLO Magic The Gathering, Pokémon TCG o Yu-Gi-Oh!. Cartón rectangular plastificado, sueltas, en sleeve, o en lotes/packs. Cartas de OTROS juegos (Dragon Ball Super CG, deportivas, Topps, álbum Panini) NO van acá — van a collectible_decor.
+- "trading_cards": cartas o sobres de cartas coleccionables. Cuatro subtipos según card_subtype: TCG individual (Magic/Pokémon/Yu-Gi-Oh!), TCG sellado (sobres/boosters cerrados), fútbol (cartas/figuritas de fútbol argentino, Topps, Panini), entretenimiento (MTV, Fox, series, películas — vintage o modernas). Cartas de TCG no-soportadas (Dragon Ball Super CG, Lorcana, etc.) → collectible_decor.
 
 - "die_cast_vehicle": autos, camiones, motos en miniatura a escala (Hot Wheels, Matchbox, Bburago, Maisto, etc.). Generalmente metálicos. Incluye réplicas genéricas sin marca (manufacturer=null, is_likely_bootleg=true).
 
@@ -102,12 +102,48 @@ REGLAS ESPECÍFICAS DE FIGURAS:
 - alphanumeric_model: número o código identificatorio visible.
 
 REGLAS ESPECÍFICAS DE TRADING CARDS:
-- brand: SOLO "Magic The Gathering", "Pokémon" o "Yu-Gi-Oh!". Si no es ninguno → null y reclasificá como collectible_decor.
-- card_name: nombre del personaje/criatura/hechizo (ej: "Charizard", "Black Lotus"). Si no lo ves claro, null.
-- set_name: nombre de la expansión si es visible. Null si no.
-- language: "Español", "Inglés", "Japonés". Null si no se determina.
-- is_foil: true si tiene acabado holográfico. false si es regular. null si no se determina.
-- units_per_pack: 1 si es individual, N si es lote/pack. Default 1.
+
+card_subtype (OBLIGATORIO si item_type=trading_cards):
+- "tcg_single": una carta individual de Magic, Pokémon o Yu-Gi-Oh!
+- "tcg_sealed": sobre/booster cerrado de Magic, Pokémon o Yu-Gi-Oh! (contiene N cartas adentro)
+- "football": carta o figurita de fútbol — jugadores, equipos, mundiales, álbumes Panini/Topps de fútbol argentino
+- "entertainment": carta de serie/película/personaje (MTV, Fox, Beavis and Butt-Head, X-Files, Garbage Pail Kids, etc.)
+
+Reglas de desempate:
+- Si el sobre está CERRADO y se ven cartas de Magic/Pokémon/Yu-Gi-Oh adentro → tcg_sealed (no tcg_single).
+- Si la carta tiene jugador de fútbol o escudo de club → football.
+- Si tiene personaje de TV/película/música y NO es TCG → entertainment.
+- Anti-falso-positivo: NO confundas cartas con cómics (cómics tienen páginas), con decor (decor no es cartón rectangular plastificado).
+
+Campos por subtipo:
+
+tcg_single / tcg_sealed:
+- brand: "Magic The Gathering" | "Pokémon" | "Yu-Gi-Oh!". Si no es ninguno → null y reclasificá.
+- card_name: nombre de la carta (solo tcg_single). Para sealed → null.
+- set_name: nombre de la expansión si visible.
+- units_per_pack: 1 para single, N (típico 8-15) para sealed.
+
+football:
+- brand: marca de la carta ("Topps", "Panini", "Salo", etc.) — texto libre.
+- player_or_subject: nombre del jugador.
+- team_or_group: equipo o selección (ej: "Boca Juniors", "Selección Argentina").
+- year: año de la temporada/mundial si visible.
+- set_name: nombre del set/álbum si visible (ej: "Mundial 78", "Fútbol 95").
+- card_number: número de la figurita/carta si visible.
+- units_per_pack: 1 default.
+
+entertainment:
+- brand: marca de la carta ("Topps", "Fleer", "Impel", etc.).
+- franchise: la serie/película/show (ej: "Beavis and Butt-Head", "The X-Files").
+- card_name: nombre del personaje o episodio si aplica.
+- year: año de emisión si visible.
+- set_name: nombre del set.
+- card_number: número de carta si visible.
+- units_per_pack: 1 default.
+
+Comunes a todos los subtipos:
+- language: idioma del texto en la carta.
+- is_foil: solo aplica a TCG. Para football/entertainment → null.
 
 REGLAS ESPECÍFICAS DE DIE-CAST:
 - manufacturer: marca del fabricante (Hot Wheels, Matchbox, etc.). Si no ves logo claro → null.
@@ -126,7 +162,10 @@ REGLAS ESPECÍFICAS DE COLLECTIBLE DECOR:
 FÓRMULA DE TÍTULO (title_suggestion, max 60 caracteres):
 - action_figure: "[Tipo] [Personaje] [Línea] [Fabricante] [#Modelo] [Escala] [Altura]cm"
 - comic: "[Título] #[Número] [Editorial] [Año] [Idioma]"
-- trading_cards: "[Brand] [Card Name] [Set] [Idioma]" Ej: "Pokémon Charizard Base Set Inglés"
+- trading_cards (tcg_single): "[Brand] [Card Name] [Set] [Idioma]"
+- trading_cards (tcg_sealed): "[Brand] Sobre [Set] [Cantidad de cartas]"
+- trading_cards (football): "[Brand] [Jugador] [Equipo/Selección] [Año]"
+- trading_cards (entertainment): "[Brand] [Franchise] [Card Name] [Año]"
 - die_cast_vehicle: "[Fabricante] [Marca auto] [Modelo] [Año] Escala [Escala]". Si bootleg: "Auto coleccionable [Modelo] Escala [Escala]" SIN mencionar marca falsa.
 - collectible_decor: "[Subtipo] [Tema] [Material] [Altura]cm"
 
@@ -189,9 +228,15 @@ JSON estricto, sin markdown, sin texto antes ni después:
     "genre": "Arte" | "Autos y motos" | "Ciencia" | "Deportes" | "Historia" | "Infantil" | "Interés general" | "Música" | "Tecnología" | "Moda" | null
   },
   "trading_cards": {
-    "brand": "Magic The Gathering" | "Pokémon" | "Yu-Gi-Oh!" | null,
+    "card_subtype": "tcg_single" | "tcg_sealed" | "football" | "entertainment" | null,
+    "brand": <string o null>,
     "card_name": <string o null>,
     "set_name": <string o null>,
+    "franchise": <string o null>,
+    "player_or_subject": <string o null>,
+    "team_or_group": <string o null>,
+    "year": <entero o null>,
+    "card_number": <string o null>,
     "language": "Español" | "Inglés" | "Japonés" | null,
     "is_foil": <bool o null>,
     "units_per_pack": <entero, default 1>
@@ -215,7 +260,7 @@ JSON estricto, sin markdown, sin texto antes ni después:
 CHECKLIST FINAL:
 1. ¿Elegí UN solo item_type de los 6?
 2. ¿Si vi un personaje/franquicia, lo clasifiqué como action_figure (no decor)?
-3. ¿Si vi una carta TCG no-Magic/Pokémon/Yu-Gi-Oh, la mandé a collectible_decor?
+3. ¿Distinguí correctamente el card_subtype (tcg_single / tcg_sealed / football / entertainment)? Si vi una carta de TCG no-soportado (Dragon Ball Super CG, Lorcana), la mandé a collectible_decor.
 4. ¿Mi type_confidence es honesta?
 5. ¿Los nombres propios son verificables o están en null?
 6. ¿La descripción NO menciona nombres propios que dejé null?
