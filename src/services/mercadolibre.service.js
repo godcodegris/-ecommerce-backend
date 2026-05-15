@@ -1735,7 +1735,14 @@ console.log(`[publishTradingCardAsFreeListing] Categoría: ${categoryId} (subtyp
     return `${tc.brand} ${tc.card_name || "Carta TCG"}${setBit}`;
   };
 
-  const familyName = `${buildBaseFamily()} #${uniqueId}`;
+  // ML limita family_name a 60 caracteres. Truncamos preservando el sufijo #uniqueId.
+  const suffix = ` #${uniqueId}`;
+  const maxBaseLength = 60 - suffix.length;
+  const rawBase = buildBaseFamily();
+  const truncatedBase = rawBase.length > maxBaseLength
+    ? rawBase.substring(0, maxBaseLength).trim()
+    : rawBase;
+  const familyName = `${truncatedBase}${suffix}`;
 
   console.log(`[publishTradingCardAsFreeListing] family_name: "${familyName}" (subtype=${tc.card_subtype || "tcg_single"})`);
 
