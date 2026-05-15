@@ -46,6 +46,8 @@ router.get("/attrs/:categoryId", async (req, res) => {
       "IMPORT_DUTY",
       "MATERIAL",
       "MODEL",
+      "ALBUM_NAME",
+      "SALE_FORMAT",
     ];
 
     const filtered = data
