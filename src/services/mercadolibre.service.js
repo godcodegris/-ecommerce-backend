@@ -1371,17 +1371,20 @@ const buildTradingCardAttributes = (visionResult) => {
   //   Debe venir en visionResult.user_provided_gtin (cargado por el usuario en el POST)
   const isPack = tc.units_per_pack && tc.units_per_pack > 1;
   const userGtin = visionResult?.user_provided_gtin;
-
-  if (isPack && userGtin) {
+  // Cuándo hace falta GTIN:
+  // - Pack/sobre sellado (units_per_pack > 1): ML siempre lo exige.
+  // - Entertainment con BRAND override (ej: "Topps" forzado): ML rebota con cause_id 7810
+  //   cuando ve una marca grande sin GTIN. Mandamos GTIN interno como mitigación.
+  const needsGtin = isPack || tc.ml_brand_override;
+  if (needsGtin && userGtin) {
     attrs.push({ id: "GTIN", value_name: String(userGtin) });
-  } else if (isPack && !userGtin) {
-    
-    console.log("[buildTradingCardAttributes] Pack sin user_provided_gtin → generando GTIN interno");
+  } else if (needsGtin && !userGtin) {
+    const reason = isPack ? "Pack" : `BRAND override (${tc.ml_brand_override})`;
+    console.log(`[buildTradingCardAttributes] ${reason} sin user_provided_gtin → generando GTIN interno`);
     attrs.push({ id: "GTIN", value_name: generateInternalGtin() });
   } else {
     attrs.push({ id: "EMPTY_GTIN_REASON", value_id: "17055160" });
   }
-
   // Fiscal monotributo / exento
   attrs.push({ id: "VALUE_ADDED_TAX", value_id: "55043032" }); // "Exento"
   attrs.push({ id: "IMPORT_DUTY", value_id: "49553239" });     // "0 %"
