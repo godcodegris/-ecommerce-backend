@@ -1663,16 +1663,8 @@ const tc = visionResult?.trading_cards || {};
   }
 
   if (!tc.brand && isNonTCG) {
-    // Para entertainment: usar franchise/player como BRAND ya que "Genérica" dispara under_review en ML.
-    // Para football: mantener "Genérica" porque football ya funciona con ese fallback (no romper).
-    if (tc.card_subtype === "entertainment") {
-      tc.brand = tc.franchise || tc.player_or_subject || "Genérica";
-      console.warn(`[publishTradingCardAsFreeListing] ⚠️ entertainment sin brand — usando "${tc.brand}" como BRAND fallback`);
-    } else {
-      // football u otro isNonTCG futuro
-      console.warn(`[publishTradingCardAsFreeListing] ⚠️ ${tc.card_subtype} sin brand identificada — usando "Genérica"`);
-      tc.brand = "Genérica";
-    }
+    console.warn(`[publishTradingCardAsFreeListing] ⚠️ ${tc.card_subtype} sin brand identificada — usando "Genérica"`);
+    tc.brand = "Genérica";
   }
 
   // Routing de categoría según subtipo: football → MLA1965 (Figuritas y Cromos), resto → MLA3390.
