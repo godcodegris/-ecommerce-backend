@@ -1235,7 +1235,8 @@ const DIECAST_VALID_SCALES = new Set([
 const TCG_BRAND_VALUE_IDS = {
   "Magic The Gathering": "15877174",
   "Pokémon": null,        // ML acepta "Pokémon" como string libre, sin value_id forzado
-  "Yu-Gi-Oh!": null
+  "Yu-Gi-Oh!": null,
+  "Genérica": "276243" 
 };
 /**
  * Construye el array de atributos para publicar un cómic en MLA1955.
