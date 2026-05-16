@@ -1238,6 +1238,21 @@ const TCG_BRAND_VALUE_IDS = {
   "Yu-Gi-Oh!": null,
   "Genérica": "276243" 
 };
+
+// Brands que ML cataloga correctamente para MLA3390 (entertainment/TCG single).
+// Cuando Vision detecta una brand fuera de este set para entertainment, mandamos
+// "Topps" como BRAND attribute (para que ML deje el item active) pero el title
+// conserva la brand real detectada por Vision en visionResult.trading_cards.brand.
+const ML_CATALOGED_BRANDS_TCG = new Set([
+  "Fleer",
+  "Topps",
+  "Upper Deck",
+  "Pokémon",
+  "Magic The Gathering",
+  "Yu-Gi-Oh!",
+  "Panini",
+  "Konami"
+]);
 /**
  * Construye el array de atributos para publicar un cómic en MLA1955.
  * Combina valores detectados por Vision + hardcodes para campos fijos.
@@ -1333,11 +1348,15 @@ const buildTradingCardAttributes = (visionResult) => {
   const tc = visionResult?.trading_cards || {};
   const attrs = [];
 
-  // BRAND — required
-  if (tc.brand) {
-    const brandAttr = { id: "BRAND", value_name: tc.brand };
-    if (TCG_BRAND_VALUE_IDS[tc.brand]) {
-      brandAttr.value_id = TCG_BRAND_VALUE_IDS[tc.brand];
+  
+  // BRAND — required.
+  // Si hay override (ej: entertainment con marca no catalogada), usamos ese para
+  // el atributo BRAND. El title se construye con tc.brand original en otro lado.
+  const brandForAttr = tc.ml_brand_override || tc.brand;
+  if (brandForAttr) {
+    const brandAttr = { id: "BRAND", value_name: brandForAttr };
+    if (TCG_BRAND_VALUE_IDS[brandForAttr]) {
+      brandAttr.value_id = TCG_BRAND_VALUE_IDS[brandForAttr];
     }
     attrs.push(brandAttr);
   }
@@ -1643,6 +1662,8 @@ export const publishComicAsFreeListing = async (productData, images, visionResul
     item_type: "comic",
   };
 };
+
+
 /**
  * Publica una carta TCG como free listing en MLA3390.
  */
@@ -1665,6 +1686,19 @@ const tc = visionResult?.trading_cards || {};
   if (!tc.brand && isNonTCG) {
     console.warn(`[publishTradingCardAsFreeListing] ⚠️ ${tc.card_subtype} sin brand identificada — usando "Genérica"`);
     tc.brand = "Genérica";
+  }
+
+  // Override de BRAND para entertainment con marca no catalogada por ML.
+  // Si Vision detecta una marca real pero ML no la cataloga, el item queda en
+  // status=under_review/waiting_for_patch. Como mitigación, mandamos un BRAND
+  // catalogado ("Topps") al payload, pero conservamos la marca real en
+  // visionResult.trading_cards.brand para que el title siga mostrándola.
+  if (tc.card_subtype === "entertainment"
+      && tc.brand
+      && tc.brand !== "Genérica"
+      && !ML_CATALOGED_BRANDS_TCG.has(tc.brand)) {
+    console.warn(`[publishTradingCardAsFreeListing] ⚠️ entertainment con brand "${tc.brand}" no catalogada en ML — usando "Topps" para BRAND attribute, title conserva "${tc.brand}"`);
+    tc.ml_brand_override = "Topps";
   }
 
   // Routing de categoría según subtipo: football → MLA1965 (Figuritas y Cromos), resto → MLA3390.
