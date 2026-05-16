@@ -1,5 +1,6 @@
 import express from "express";
 import pool from "../db.js";
+import { debugGetItem } from "../services/mercadolibre.service.js";
 
 const router = express.Router();
 
@@ -94,6 +95,18 @@ router.get("/discovery", async (req, res) => {
   } catch (err) {
     console.error("[debug/discovery] Error:", err);
     return res.status(500).json({ error: err.message });
+  }
+});
+router.get("/item/:mlId", async (req, res) => {
+  try {
+    const { mlId } = req.params;
+    const item = await debugGetItem(mlId);
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({
+      error: err.message,
+      ml_response: err.response?.data || null
+    });
   }
 });
 
