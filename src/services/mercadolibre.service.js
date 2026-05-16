@@ -1383,13 +1383,21 @@ const buildTradingCardAttributes = (visionResult) => {
     // ALBUM_NAME: si Vision identificó set_name, usarlo; si no, fallback genérico.
     const albumName = tc.set_name || "Álbum coleccionable";
     attrs.push({ id: "ALBUM_NAME", value_name: albumName });
-
     // SALE_FORMAT: 1359391 = "Unidad", 1359392 = "Pack". Cartas sueltas = Unidad.
     attrs.push({ id: "SALE_FORMAT", value_id: "1359391" });
-
     // UNITS_PER_PACK: requerido cuando SALE_FORMAT=Unidad. Siempre 1 para cartas sueltas.
     attrs.push({ id: "UNITS_PER_PACK", value_name: "1" });
   }
+
+  // Atributo extra para entertainment (MLA3390): CHARACTER.
+  // Hipótesis 15/05: ML deja entertainment en under_review/waiting_for_patch
+  // si falta CHARACTER. Comparativa contra sealed comprable confirmó que
+  // sealed envía CHARACTER y entertainment no. Probamos solo este atributo.
+  if (tc.card_subtype === "entertainment") {
+    const characterValue = tc.franchise || tc.player_or_subject || "Genérico";
+    attrs.push({ id: "CHARACTER", value_name: characterValue });
+  }
+
   return attrs;
 };
 
